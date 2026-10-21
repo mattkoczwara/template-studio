@@ -26,4 +26,6 @@ jobs:
       - name: Check portable storage and recovery
         run: dotnet run --project tests/Mosaic.Storage.Checks/Mosaic.Storage.Checks.csproj -c Release
       - name: Build Windows editor
-        run: dotnet build src/Mosaic.App/Mosaic.App.csproj -c Release --locked-mode
+        run: dotnet build src/Mosaic.App/Mosaic.App.csproj -c Release -r win-x64 -p:RestoreLockedMode=true
+
+
