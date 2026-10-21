@@ -1,0 +1,5 @@
+# Vendor manifests hash exact bytes, including upstream text line endings.
+vendor/ai/** -text
+vendor/licenses/** -text
+*.png binary
+*.ico binary
