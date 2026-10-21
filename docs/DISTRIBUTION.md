@@ -28,7 +28,7 @@ The app project includes `vendor/ai/**` under `ai/**`, `vendor/licenses/**` unde
 
 Inno Setup 7.1.0 x64 was acquired from the [upstream release](https://github.com/jrsoftware/issrc/releases/tag/is-7_1_0), linked by the [official download page](https://jrsoftware.org/isdl.php). The downloaded `innosetup-7.1.0-x64.exe` SHA-256 is `0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f`. Its Authenticode signature verified as valid, publisher Pyrsys B.V., certificate thumbprint `E0AB19C8D38CBF9C44709925122A7A02F8C70CB7`.
 
-The compiler was installed into `.tools/inno/compiler` in per-user mode without icons or optional association tasks. It is not shipped inside the application. Inno Setup's license in that build-tool directory permits use for any purpose, including commercial applications, under its attribution and redistribution conditions; the upstream website also requests purchase for commercial use. No application-wide license is inferred by packaging.
+The compiler was installed into `.tools/inno/compiler` in per-user mode without icons or optional association tasks. It is not shipped inside the application. Inno Setup's license in that build-tool directory permits use for any purpose, including commercial applications, under its attribution and redistribution conditions; the upstream website also requests purchase for commercial use. Original project code is MIT-licensed; the root LICENSE is included in new application builds. Third-party payloads retain their own terms.
 
 ## Release evidence boundary
 
@@ -45,3 +45,4 @@ The final 1.0.0 installer is **63,337,792 bytes** (about 60.4 MiB), SHA-256 `d00
 The same final hash passed both English and Polish per-user installation/runtime/uninstallation cycles. All payload hashes matched; Desktop/Start shortcuts and project association pointed to the actual installation; the installed executable passed 45 integrated editor checks on its bundled runtime 10.0.13 with isolated test data; normal uninstall removed registered files/shortcuts/association and preserved an unknown personal-project sentinel. English evidence is `artifacts/installer-checks/4952a1792ca64dcf82ee9a1233d0df68/`; Polish evidence is `artifacts/installer-checks/b42a8f3c6652429b80d39d0b1b242eb5/`.
 
 These actual installed-host journeys do not establish clean-machine offline behavior, signing reputation, physical printer measurements, fluent Polish review or independent artist usability. See [ACCEPTANCE.md](ACCEPTANCE.md) for the complete requirement map and remaining external acceptance gates.
+
