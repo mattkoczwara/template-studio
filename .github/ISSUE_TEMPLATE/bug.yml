@@ -1,0 +1,22 @@
+name: Bug report
+description: Report a reproducible editor, image, project or output problem.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include expected behavior and steps to reproduce. Use artwork you may share and remove personal paths.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Version and environment
+      description: App version or commit, Windows version, interface language and display scaling.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Image or print details (if applicable)
+      description: Source format/pixels, finished inches, orientation, margins, printer/driver, direct print or PDF at 100%, and actual ruler/seam measurements.

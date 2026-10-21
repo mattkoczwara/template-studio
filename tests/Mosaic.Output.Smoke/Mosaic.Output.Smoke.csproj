@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><SelfContained>false</SelfContained></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Mosaic.Output/Mosaic.Output.csproj" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+</Project>

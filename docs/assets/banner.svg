@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+<title id="title">Mosaic Template Studio</title>
+<desc id="desc">From artwork to full-size possibility. Four tiles echo the application's icon.</desc>
+<rect width="1280" height="360" rx="20" fill="#f3f5ef"/>
+<path d="M900 0v360M1080 0v360M0 180h1280" stroke="#dfe5d9"/>
+<g transform="translate(72 66)">
+<rect width="38" height="38" rx="9" fill="#286b5c"/><rect x="44" width="38" height="38" rx="9" fill="#b6cbb5"/>
+<rect y="44" width="38" height="38" rx="9" fill="#d3af79"/><rect x="44" y="44" width="38" height="38" rx="9" fill="#6f9481"/>
+</g>
+<text x="180" y="105" fill="#233f40" font-family="Georgia,serif" font-size="46">Mosaic</text>
+<text x="182" y="137" fill="#48635d" font-family="Segoe UI,Arial,sans-serif" font-size="15" letter-spacing="4">TEMPLATE STUDIO</text>
+<text x="72" y="236" fill="#233f40" font-family="Georgia,serif" font-size="40">From artwork to full-size possibility.</text>
+<text x="74" y="284" fill="#48635d" font-family="Segoe UI,Arial,sans-serif" font-size="19">Exact dimensions. Full color. Entirely offline.</text>
+<g transform="translate(970 70) rotate(8 94 110)">
+<rect x="7" y="9" width="188" height="226" rx="4" fill="#dce3d7"/>
+<rect width="188" height="226" rx="4" fill="#fffdf5"/>
+<circle cx="94" cy="103" r="67" fill="#d3af79"/>
+<path d="M94 190C30 151 25 94 35 72c47 8 61 49 59 118" fill="#286b5c"/>
+<path d="M94 190c64-39 69-96 59-118-47 8-61 49-59 118" fill="#6f9481"/>
+<path d="M94 0v226M0 113h188" stroke="#fffdf5" stroke-width="5"/>
+<path d="M94 0v226M0 113h188" stroke="#879c8a" stroke-dasharray="4 4"/>
+</g></svg>

@@ -1,0 +1,102 @@
+﻿[
+    {
+        "path":  "LICENSE-glslang.txt",
+        "bytes":  54615,
+        "sha256":  "17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677"
+    },
+    {
+        "path":  "LICENSE-libjpeg-turbo.txt",
+        "bytes":  6077,
+        "sha256":  "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579"
+    },
+    {
+        "path":  "LICENSE-libwebp.txt",
+        "bytes":  1496,
+        "sha256":  "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    {
+        "path":  "LICENSE-Microsoft-runtime.txt",
+        "bytes":  6624,
+        "sha256":  "2dd434a15fb5f9d28c33211a5af471eb719acba5db65e5103e0db95e7869a2fb"
+    },
+    {
+        "path":  "LICENSE-ncnn.txt",
+        "bytes":  6427,
+        "sha256":  "7c974bac98848df46be1af5bdaa3c3c9c01f6082a90f55caeb7f60c6208aa255"
+    },
+    {
+        "path":  "LICENSE-stb.txt",
+        "bytes":  2510,
+        "sha256":  "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63"
+    },
+    {
+        "path":  "LICENSE-waifu2x-model.txt",
+        "bytes":  1091,
+        "sha256":  "6beebd9ebb8077acbefd4b8c9b50fa02a647c301c3293589f3640d7d17f2a7f0"
+    },
+    {
+        "path":  "LICENSE-waifu2x-ncnn.txt",
+        "bytes":  1093,
+        "sha256":  "0100dda18fae09954490a58690d1ddd9355794a0a60da80609c9a8886ca587c6"
+    },
+    {
+        "path":  "LICENSE-zlib-ng.txt",
+        "bytes":  867,
+        "sha256":  "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee"
+    },
+    {
+        "path":  "Microsoft-REDIST.txt",
+        "bytes":  187,
+        "sha256":  "da53b097e02b08e0fc69706102a60bc384fe756426ae4dc4a855e96f95cb2b9c"
+    },
+    {
+        "path":  "mosaic-cunet-cpu.exe",
+        "bytes":  18711040,
+        "sha256":  "b0670b8ea4e7d37c2c01e2d133df671571fbff3f636502b441c5367e380f430c"
+    },
+    {
+        "path":  "msvcp140.dll",
+        "bytes":  557728,
+        "sha256":  "0f885b509a685d2bbfa652fed26b5fb31d88fbdab0a978c641d1c7b8aa460aa9"
+    },
+    {
+        "path":  "README-upstream.md",
+        "bytes":  7029,
+        "sha256":  "16bd3b7e436c90c44e96bf7570a5d0db74e25288443bf5f4b1eff9adc2670a3b"
+    },
+    {
+        "path":  "vcomp140.dll",
+        "bytes":  193152,
+        "sha256":  "55aba23cdcd6484fbb06f4155b8ca75adfce7a881f10afd0c49457165e677164"
+    },
+    {
+        "path":  "vcruntime140.dll",
+        "bytes":  124544,
+        "sha256":  "d5e4d9a3e835fa679450145d6a7d94e36573a509317111904d9b3712c30d9066"
+    },
+    {
+        "path":  "vcruntime140_1.dll",
+        "bytes":  49792,
+        "sha256":  "1f2d41c4aa5db0bc33ebf7b66d72943a817d7ce6cbe880502a9403823633093f"
+    },
+    {
+        "path":  "waifu2x-ncnn-vulkan.exe",
+        "bytes":  5094912,
+        "sha256":  "7ef2efc4c54e1a963046b3a9b0aee6bca5b1487a7c907373035a10f4187a733d"
+    },
+    {
+        "path":  "cpu-src/mosaic-cunet-cpu.cpp",
+        "bytes":  4440,
+        "sha256":  "4584f469f856d5846d131320a9b5dee9f5e77ef1bcbec1ec3a4b741d1fb81509"
+    },
+    {
+        "path":  "models-cunet/scale2.0x_model.bin",
+        "bytes":  2776400,
+        "sha256":  "d82ed30207fd07e1c16726a9ca838ce44e6e25a105b0278c7ca681516ee0e18e"
+    },
+    {
+        "path":  "models-cunet/scale2.0x_model.param",
+        "bytes":  7310,
+        "sha256":  "9b06073e039ca93d5bd79f6bb42016cd98d5bdefa0e9761df6b22b844c39965f"
+    }
+]

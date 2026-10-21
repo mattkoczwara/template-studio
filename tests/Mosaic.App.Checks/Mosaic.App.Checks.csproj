@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><RuntimeIdentifier>win-x64</RuntimeIdentifier><SelfContained>true</SelfContained><AssemblyName>Mosaic.App.Checks</AssemblyName></PropertyGroup><ItemGroup><ProjectReference Include="../../src/Mosaic.App/Mosaic.App.csproj"/></ItemGroup></Project>

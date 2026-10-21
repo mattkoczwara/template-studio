@@ -1,0 +1,17 @@
+name: Improvement proposal
+description: Suggest a focused improvement to the artist's workflow.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What task is difficult today?
+      description: Describe the artist's task and a concrete example.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested behavior
+      description: Explain the benefit and any relationship to the product requirements.
+    validations:
+      required: true

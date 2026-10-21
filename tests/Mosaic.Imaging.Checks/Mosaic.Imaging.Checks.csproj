@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Mosaic.Imaging/Mosaic.Imaging.csproj" /><ProjectReference Include="../../src/Mosaic.Output/Mosaic.Output.csproj" /></ItemGroup>
+</Project>

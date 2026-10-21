@@ -1,0 +1,29 @@
+name: Windows checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  software:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Check documentation and native asset integrity
+        shell: pwsh
+        run: ./scripts/Check-Repository.ps1
+      - name: Check physical geometry
+        run: dotnet run --project tests/Mosaic.Core.Checks/Mosaic.Core.Checks.csproj -c Release
+      - name: Check portable storage and recovery
+        run: dotnet run --project tests/Mosaic.Storage.Checks/Mosaic.Storage.Checks.csproj -c Release
+      - name: Build Windows editor
+        run: dotnet build src/Mosaic.App/Mosaic.App.csproj -c Release --locked-mode

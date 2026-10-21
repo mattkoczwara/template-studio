@@ -1,0 +1,71 @@
+using System.Windows;
+using System.IO;
+
+namespace Mosaic.App;
+
+public partial class App : Application
+{
+    internal static void FitOnScreen(Window window)
+    {
+        var area = SystemParameters.WorkArea;
+        window.MinWidth = Math.Min(window.MinWidth, area.Width);
+        window.MinHeight = Math.Min(window.MinHeight, area.Height);
+        window.Width = Math.Min(window.Width, area.Width);
+        window.Height = Math.Min(window.Height, area.Height);
+        if (!double.IsNaN(window.Left)) window.Left = Math.Clamp(window.Left, area.Left, Math.Max(area.Left, area.Right - window.Width));
+        if (!double.IsNaN(window.Top)) window.Top = Math.Clamp(window.Top, area.Top, Math.Max(area.Top, area.Bottom - window.Height));
+    }
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        DispatcherUnhandledException += (_, args) =>
+        {
+            LocalLog.Write("ui_failure", args.Exception.GetType().Name);
+            MessageBox.Show(Lang.T("Unexpected"), Lang.T("AppName"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            args.Handled = true;
+        };
+        if (MainWindow != null) return; // A dispatcher acceptance host may already own the application window.
+        int verifyIndex = Array.IndexOf(e.Args, "--verify-install");
+        if (verifyIndex >= 0 && verifyIndex + 1 < e.Args.Length)
+        {
+            string output = Path.GetFullPath(e.Args[verifyIndex + 1]);
+            Directory.CreateDirectory(output);
+            var verificationWindow = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state"));
+            MainWindow = verificationWindow;
+            verificationWindow.ContentRendered += async (_, _) =>
+            {
+                int exitCode = 1;
+                try
+                {
+                    int checks = await verificationWindow.RunAcceptanceChecksAsync(output);
+                    File.WriteAllText(Path.Combine(output, "installed-runtime.json"), System.Text.Json.JsonSerializer.Serialize(new { Passed = true, Checks = checks, Runtime = Environment.Version.ToString(), ApplicationDirectory = AppContext.BaseDirectory, PhysicalPrintVerified = false }));
+                    exitCode = 0;
+                }
+                catch (Exception ex) { File.WriteAllText(Path.Combine(output, "failure.txt"), ex.ToString()); }
+                finally { verificationWindow.FinishChecks(); Shutdown(exitCode); }
+            };
+            verificationWindow.Show();
+            return;
+        }
+        var window = new MainWindow(e.Args);
+        MainWindow = window;
+        window.Show();
+    }
+}
+
+internal static class LocalLog
+{
+    public static void Write(string stage, string kind = "")
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MosaicTemplateStudio", "logs");
+            Directory.CreateDirectory(dir);
+            foreach (var file in new DirectoryInfo(dir).GetFiles("*.log").OrderByDescending(f => f.LastWriteTimeUtc).Skip(5)) file.Delete();
+            var path = Path.Combine(dir, DateTime.UtcNow.ToString("yyyy-MM-dd") + ".log");
+            if (File.Exists(path) && new FileInfo(path).Length > 1024 * 1024) File.WriteAllText(path, "");
+            File.AppendAllText(path, $"{DateTime.UtcNow:O} {stage} {kind}\n");
+        }
+        catch { /* Diagnostics must never prevent editing or recovery. */ }
+    }
+}
