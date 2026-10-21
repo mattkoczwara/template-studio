@@ -11,7 +11,7 @@ internal static class Program
         Directory.CreateDirectory(output);
         int exitCode = 1;
         var application = new App(); application.InitializeComponent();
-        var window = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state"));
+        var window = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state-" + Guid.NewGuid().ToString("N")));
         application.MainWindow = window;
         window.ContentRendered += async (_, _) =>
         {

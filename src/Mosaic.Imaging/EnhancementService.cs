@@ -24,6 +24,7 @@ public sealed partial class EnhancementService : IImageEnhancer
     public const string ModelId = "waifu2x-cunet-20250915-scale2x-no-denoise";
     private readonly string _assets;
     private readonly string? _cache;
+    private readonly long _maxCacheBytes;
     public string LastBackend { get; private set; } = "";
     public long LastWorkerPeakBytes { get; private set; }
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -39,10 +40,12 @@ public sealed partial class EnhancementService : IImageEnhancer
         ["models-cunet/scale2.0x_model.param"] = "9b06073e039ca93d5bd79f6bb42016cd98d5bdefa0e9761df6b22b844c39965f"
     };
 
-    public EnhancementService(string? assetsRoot = null, string? cacheRoot = null)
+    public EnhancementService(string? assetsRoot = null, string? cacheRoot = null, long maxCacheBytes = CacheBudget.DefaultLimit)
     {
         _assets = Path.GetFullPath(assetsRoot ?? Path.Combine(AppContext.BaseDirectory, "ai"));
         _cache = cacheRoot;
+        if (maxCacheBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxCacheBytes));
+        _maxCacheBytes = maxCacheBytes;
     }
 
     public async Task<string> EnhanceAsync(SourceInfo source, IProgress<JobProgress>? progress, CancellationToken ct, bool forceCpu = false)
@@ -55,6 +58,8 @@ public sealed partial class EnhancementService : IImageEnhancer
                 throw new EnhancementException("aiSourceTooLarge");
             string dir = _cache == null ? Path.GetDirectoryName(source.NormalizedPath)! : Path.Combine(_cache, source.Sha256);
             Directory.CreateDirectory(dir);
+            var budget = new CacheBudget(_cache ?? Path.GetDirectoryName(dir)!, _maxCacheBytes);
+            using var cacheLease = await budget.AcquireAsync(ct).ConfigureAwait(false);
             string destination = Path.Combine(dir, "enhanced-cunet-20250915-2x-n-1.png");
             if (File.Exists(destination))
             {
@@ -67,8 +72,10 @@ public sealed partial class EnhancementService : IImageEnhancer
                 catch (MagickException) { }
                 File.Delete(destination);
             }
-            if (new DriveInfo(Path.GetPathRoot(dir)!).AvailableFreeSpace < Math.Max(512L * 1024 * 1024, (long)source.Width * source.Height * 24))
-                throw new EnhancementException("diskFull");
+            // Bound both GPU PNG output and the CPU fallback's raw input/output,
+            // atomic PNG and checksum siblings before launching the trusted worker.
+            budget.EnsureCapacity(checked((long)source.Width * source.Height * 64 + 2L * 1024 * 1024));
+            budget.EnsureDiskSpace(Math.Max(512L * 1024 * 1024, (long)source.Width * source.Height * 64));
 
             var attempts = forceCpu ? new[] { (Cpu: true, Tile: 64) } : new[] { (Cpu: false, Tile: 128), (Cpu: false, Tile: 64), (Cpu: true, Tile: 64) };
             foreach (var attempt in attempts)
@@ -78,7 +85,7 @@ public sealed partial class EnhancementService : IImageEnhancer
                 string temp = Path.Combine(dir, Guid.NewGuid().ToString("N") + ".png");
                 try
                 {
-                    bool completed = await RunWorkerAsync(source.NormalizedPath, temp, attempt.Cpu, attempt.Tile, progress, ct).ConfigureAwait(false);
+                    bool completed = await RunWorkerAsync(source.NormalizedPath, temp, attempt.Cpu, attempt.Tile, progress, ct, budget).ConfigureAwait(false);
                     if (!completed || !File.Exists(temp)) continue;
                     var info = new MagickImageInfo(temp);
                     if (info.Width != source.Width * 2 || info.Height != source.Height * 2) continue;
@@ -94,6 +101,7 @@ public sealed partial class EnhancementService : IImageEnhancer
         }
         catch (OperationCanceledException) { throw; }
         catch (EnhancementException) { throw; }
+        catch (ImagePipelineException e) { throw new EnhancementException(e.Code, e); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or MagickException)
         { throw new EnhancementException("aiFailed", e); }
         finally { _gate.Release(); }
@@ -112,9 +120,9 @@ public sealed partial class EnhancementService : IImageEnhancer
         }
     }
 
-    private async Task<bool> RunWorkerAsync(string input, string output, bool cpu, int tile, IProgress<JobProgress>? progress, CancellationToken ct)
+    private async Task<bool> RunWorkerAsync(string input, string output, bool cpu, int tile, IProgress<JobProgress>? progress, CancellationToken ct, CacheBudget budget)
     {
-        if (cpu) return await RunCpuAsync(input, output, tile, progress, ct).ConfigureAwait(false);
+        if (cpu) return await RunCpuAsync(input, output, tile, progress, ct, budget).ConfigureAwait(false);
         var start = new ProcessStartInfo(Path.Combine(_assets, "waifu2x-ncnn-vulkan.exe"))
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -125,7 +133,7 @@ public sealed partial class EnhancementService : IImageEnhancer
         return await ExecuteAsync(start, cpu, progress, ct).ConfigureAwait(false);
     }
 
-    private async Task<bool> RunCpuAsync(string input, string output, int tile, IProgress<JobProgress>? progress, CancellationToken ct)
+    private async Task<bool> RunCpuAsync(string input, string output, int tile, IProgress<JobProgress>? progress, CancellationToken ct, CacheBudget budget)
     {
         string rawInput = output + ".input.rgb", rawOutput = output + ".output.rgb";
         try
@@ -152,7 +160,7 @@ public sealed partial class EnhancementService : IImageEnhancer
                 ct.ThrowIfCancellationRequested();
                 using var image = new MagickImage(rawOutput, new MagickReadSettings
                 { Format = MagickFormat.Rgb, Width = dimensions.Width * 2, Height = dimensions.Height * 2, Depth = 8 });
-                ImageService.WriteAtomic(image, output, ct);
+                ImageService.WriteAtomic(image, output, ct, budget);
             }, ct).ConfigureAwait(false);
             return true;
         }

@@ -17,13 +17,15 @@ public sealed class ImageService
     public const long MaxSourceBytes = 128L * 1024 * 1024;
     public const long MaxSourcePixels = 80_000_000;
     private readonly string _cache;
+    private readonly CacheBudget _budget;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private static int _configured;
 
-    public ImageService(string? cacheRoot = null)
+    public ImageService(string? cacheRoot = null, long maxCacheBytes = CacheBudget.DefaultLimit)
     {
         _cache = Path.GetFullPath(cacheRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MosaicTemplateStudio", "cache"));
         Directory.CreateDirectory(_cache);
+        _budget = new CacheBudget(_cache, maxCacheBytes);
         if (Interlocked.Exchange(ref _configured, 1) == 0)
         {
             // Magick.NET 15 does not expose Map; ImageMagick honors this process-local limit.
@@ -50,13 +52,13 @@ public sealed class ImageService
         var file = new FileInfo(path);
         if (!file.Exists || file.Length == 0 || file.Length > MaxSourceBytes) throw new ImagePipelineException("imageTooLarge");
         ct.ThrowIfCancellationRequested();
-        EnsureSpace(file.Length * 6 + 256L * 1024 * 1024);
+        _budget.EnsureDiskSpace(file.Length * 6 + 256L * 1024 * 1024);
         string hash;
         using (var input = File.OpenRead(path)) hash = Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
         var dir = Path.Combine(_cache, hash);
         Directory.CreateDirectory(dir);
         var original = Path.Combine(dir, "original" + ext);
-        if (!File.Exists(original)) AtomicCopy(path, original, ct);
+        if (!File.Exists(original)) AtomicCopy(path, original, ct, _budget);
         using (var verify = File.OpenRead(original))
             if (!Convert.ToHexString(SHA256.HashData(verify)).Equals(hash, StringComparison.OrdinalIgnoreCase))
                 throw new ImagePipelineException("imageReadFailed");
@@ -73,12 +75,12 @@ public sealed class ImageService
             image.AutoOrient();
             Normalize(image);
             int width = checked((int)image.Width), height = checked((int)image.Height);
-            if (!IsVerifiedImage(normalized, width, height)) WriteAtomic(image, normalized, ct);
+            if (!IsVerifiedImage(normalized, width, height)) WriteAtomic(image, normalized, ct, _budget);
             if (!IsVerifiedImage(preview))
             {
                 image.FilterType = FilterType.Lanczos;
                 image.Resize(new MagickGeometry(1800, 1800) { Greater = true });
-                WriteAtomic(image, preview, ct);
+                WriteAtomic(image, preview, ct, _budget);
             }
             return new(original, normalized, hash, width, height, format.ToString(), file.Length, preview);
         }
@@ -133,7 +135,7 @@ public sealed class ImageService
                 image.Resize((uint)Math.Round(image.Width * scale), (uint)Math.Round(image.Height * scale));
             }
         }
-        WriteAtomic(image, output, ct);
+        WriteAtomic(image, output, ct, _budget);
         return output;
     }, ct);
 
@@ -150,19 +152,43 @@ public sealed class ImageService
         enhanced.Resize(512, 512);
         using var collection = new MagickImageCollection { original.Clone(), enhanced.Clone() };
         using var joined = collection.AppendHorizontally();
-        WriteAtomic(joined, output, ct);
+        WriteAtomic(joined, output, ct, _budget);
         return output;
     }, ct);
 
-    public void CleanDerivedCache(TimeSpan maxAge)
+    /// <summary>Retains all assets of a document while any window/process holds its lease.</summary>
+    public async Task<IDisposable> PreserveSourceAsync(string sourceHash, CancellationToken ct = default)
     {
-        // Only stale derived products. Immutable originals remain until the user explicitly clears the cache.
-        foreach (var file in Directory.EnumerateFiles(_cache, "*.png", SearchOption.AllDirectories))
-            if (!Path.GetFileName(file).StartsWith("original", StringComparison.Ordinal) && File.GetLastWriteTimeUtc(file) < DateTime.UtcNow - maxAge)
-                try { File.Delete(file); } catch (IOException) { }
+        if (!IsSourceHash(sourceHash)) throw new ArgumentException("Invalid source identity.", nameof(sourceHash));
+        using var cacheLease = await _budget.AcquireAsync(ct).ConfigureAwait(false);
+        if (!Directory.Exists(Path.Combine(_cache, sourceHash))) throw new ImagePipelineException("imageReadFailed");
+        // Sidecars live outside source folders, so cleanup never removes the lock's
+        // identity. Shared handles let several windows retain the same source.
+        return new FileStream(SourceLeasePath(sourceHash), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
     }
 
-    /// <summary>Explicit user cleanup; current document's complete source directory is retained.</summary>
+    public void CleanDerivedCache(TimeSpan maxAge)
+    {
+        // Explicit cleanup only. Pinned documents retain every asset. For other
+        // sources remove disposable output variants, never normalized/source/AI data.
+        using var cacheLease = _budget.AcquireAsync(CancellationToken.None).GetAwaiter().GetResult();
+        foreach (var folder in Directory.EnumerateDirectories(_cache))
+        {
+            string hash = Path.GetFileName(folder);
+            if (!IsSourceHash(hash) || (File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0) continue;
+            using var sourceLease = TryClaimSourceCleanup(hash);
+            if (sourceLease == null) continue;
+            foreach (var file in Directory.EnumerateFiles(folder, "*.png"))
+            {
+                string name = Path.GetFileName(file);
+                if ((name.StartsWith("standard-r", StringComparison.Ordinal) || name.StartsWith("enhanced-r", StringComparison.Ordinal) || name == "comparison.png") &&
+                    File.GetLastWriteTimeUtc(file) < DateTime.UtcNow - maxAge)
+                    try { File.Delete(file); File.Delete(file + ".sha256"); } catch (IOException) { }
+            }
+        }
+    }
+
+    /// <summary>Explicit cleanup retains the requested source and all leased documents.</summary>
     public Task ClearCacheAsync(string? preserveSourceHash, CancellationToken ct = default) => RunAsync(() =>
     {
         foreach (string folder in Directory.EnumerateDirectories(_cache))
@@ -170,19 +196,33 @@ public sealed class ImageService
             ct.ThrowIfCancellationRequested();
             string name = Path.GetFileName(folder);
             // Operate only on cache-owned SHA directories, never a path from a project or manifest.
-            if (name.Length != 64 || name.Any(c => !Uri.IsHexDigit(c)) || name.Equals(preserveSourceHash, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!IsSourceHash(name) || name.Equals(preserveSourceHash, StringComparison.OrdinalIgnoreCase)) continue;
             string full = Path.GetFullPath(folder);
             if (!full.StartsWith(_cache + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
             if ((File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0) continue;
+            using var sourceLease = TryClaimSourceCleanup(name);
+            if (sourceLease == null) continue;
             Directory.Delete(full, recursive: true);
         }
         return true;
     }, ct);
 
+    private static bool IsSourceHash(string hash) => hash.Length == 64 && hash.All(Uri.IsHexDigit);
+    private string SourceLeasePath(string hash) => Path.Combine(_cache, ".source-" + hash.ToLowerInvariant() + ".lock");
+    private FileStream? TryClaimSourceCleanup(string hash)
+    {
+        try { return new FileStream(SourceLeasePath(hash), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        catch (IOException ex) when ((ex.HResult & 0xffff) is 32 or 33) { return null; }
+    }
+
     private async Task<T> RunAsync<T>(Func<T> action, CancellationToken ct)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try { return await Task.Run(action, ct).ConfigureAwait(false); }
+        try
+        {
+            using var lease = await _budget.AcquireAsync(ct).ConfigureAwait(false);
+            return await Task.Run(action, ct).ConfigureAwait(false);
+        }
         finally { _gate.Release(); }
     }
 
@@ -211,17 +251,9 @@ public sealed class ImageService
             throw new ImagePipelineException("imageTooLarge");
     }
 
-    private void EnsureSpace(long bytes)
+    private static void AtomicCopy(string source, string destination, CancellationToken ct, CacheBudget budget)
     {
-        var drive = new DriveInfo(Path.GetPathRoot(_cache)!);
-        if (drive.AvailableFreeSpace < bytes) throw new ImagePipelineException("diskFull");
-        // Bound persistent working files too: originals are retained safely until explicit cleanup.
-        long cached = Directory.EnumerateFiles(_cache, "*", SearchOption.AllDirectories).Sum(x => new FileInfo(x).Length);
-        if (cached + bytes > 4L * 1024 * 1024 * 1024) throw new ImagePipelineException("cacheFull");
-    }
-
-    private static void AtomicCopy(string source, string destination, CancellationToken ct)
-    {
+        budget.EnsureCapacity(new FileInfo(source).Length);
         var temp = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -237,8 +269,9 @@ public sealed class ImageService
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 
-    internal static void WriteAtomic(IMagickImage<byte> image, string destination, CancellationToken ct)
+    internal static void WriteAtomic(IMagickImage<byte> image, string destination, CancellationToken ct, CacheBudget budget)
     {
+        budget.EnsureCapacity(CacheBudget.PngWriteReserve(image.Width, image.Height));
         var temp = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {

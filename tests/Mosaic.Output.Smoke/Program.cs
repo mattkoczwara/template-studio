@@ -115,6 +115,7 @@ internal static class Program
             InstalledPrinter[] preferredFixtures = {new("Windows PDF","Virtual",true),new("EPSON ET-8500 Copy","Microsoft IPP",false),new("EPSON ET-8500 Series","EPSON ET-8500 Series",false),new("Canon MF210 Series","Microsoft IPP",false)};
             Check(PrintService.ChoosePreferredPrinter(preferredFixtures,"canon-mf210")=="Canon MF210 Series","Canon profile selects Canon queue");
             Check(PrintService.ChoosePreferredPrinter(preferredFixtures,"epson-et8500")=="EPSON ET-8500 Series","Epson profile prefers OEM queue");
+            CheckCalibrationSelection(trimSnapshot);
             foreach(var mode in new[]{OrientationMode.Portrait,OrientationMode.Landscape})
             {
                 var cal=exporter.ExportCalibrationAsync(Path.Combine(folder,"calibration-"+mode+"-pl.pdf"),new(Orientation:mode),"pl").GetAwaiter().GetResult();
@@ -141,6 +142,7 @@ internal static class Program
                     using var queue=new System.Printing.PrintQueue(server,printer.Name);
                     var caps=queue.GetPrintCapabilities();
                     Console.WriteLine(printer.Name+" | driver="+printer.Driver+" | borderless="+string.Join(",",caps.PageBorderlessCapability));
+                    CheckValidatedTicketParity(queue, printer.Name.Contains("MF210") ? "canon-mf210" : "epson-et8500");
                     if(printer.Name=="EPSON ET-8500 Series")
                     {
                         foreach(var orient in new[]{System.Printing.PageOrientation.Portrait,System.Printing.PageOrientation.Landscape})
@@ -160,6 +162,72 @@ internal static class Program
         }
         catch(Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
+    private static void CheckCalibrationSelection(RenderSnapshot snapshot)
+    {
+        using var capabilityXml = new MemoryStream(Encoding.UTF8.GetBytes("""
+            <psf:PrintCapabilities xmlns:psf="http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework" version="1" />
+            """));
+        var capabilities = new System.Printing.PrintCapabilities(capabilityXml);
+        var record = new CalibrationRecord { PrinterName = "selected Epson", Driver = "driver", DriverFingerprint = "settings",
+            Profile = snapshot.State.PrinterProfile, Orientation = snapshot.Layout.Orientation, Enabled = true };
+        CalibrationRecord? Resolve(IReadOnlyList<CalibrationRecord> records, RenderSnapshot? output = null,
+            string queue = "selected Epson", string driver = "driver", string fingerprint = "settings") =>
+            PrintService.ResolveCalibration(records, output ?? snapshot, queue, driver, fingerprint, capabilities);
+        void Reject(CalibrationRecord invalid, string expected, string name, string driver = "driver", string fingerprint = "settings")
+        {
+            try { Resolve([invalid], driver: driver, fingerprint: fingerprint); throw new Exception("FAIL: " + name); }
+            catch (OutputException ex) { Check(ex.Code == expected, name); }
+        }
+        Check(snapshot.State.PrinterName == null && Resolve([record]) == record, "first print with no saved printer applies selected queue calibration");
+        Check(Resolve([record], snapshot with { State = snapshot.State with { PrinterName = "selected Epson" } }) == record,
+            "repeat print applies same calibration");
+        Check(Resolve([record], snapshot with { State = snapshot.State with { PrinterName = "previous queue" } }) == record,
+            "native dialog selection overrides saved queue for calibration");
+        Check(Resolve([record], queue: "different queue") == null, "different queue never reuses another queue correction");
+        var otherQueue = record with { PrinterName = "different queue", MeasuredAt = record.MeasuredAt.AddMinutes(1) };
+        Check(Resolve([record, otherQueue], queue: "different queue") == otherQueue, "changed queue resolves its own calibration");
+        var stale = record with { DriverFingerprint = "old settings", MeasuredAt = record.MeasuredAt.AddMinutes(2) };
+        Check(Resolve([stale, record]) == record, "older exact settings win over newer mismatched settings");
+        Check(Resolve([record with { Enabled = false }]) == null, "disabled correction omitted");
+        Check(Resolve([record with { Pathway = "pdf" }]) == null, "PDF pathway correction omitted");
+        Check(Resolve([record with { Profile = "canon-mf210" }]) == null, "different profile correction omitted");
+        Check(Resolve([record with { Orientation = snapshot.Layout.Orientation == SheetOrientation.Portrait ? SheetOrientation.Landscape : SheetOrientation.Portrait }]) == null,
+            "different orientation correction omitted");
+        Reject(stale, "calibrationMismatch", "stale selected queue settings rejected");
+        Reject(record, "calibrationMismatch", "changed driver rejected", driver: "new driver");
+        Reject(record with { DriverFingerprint = "" }, "calibrationMismatch", "missing fingerprint rejected", fingerprint: "");
+        Reject(record with { EdgeClipping = true }, "calibrationClipping", "known clipped edges rejected");
+        Reject(record with { MeasuredXInches = 3.5m }, "calibrationClipping", "excessive correction rejected");
+        Reject(record with { OffsetXInches = 1m }, "calibrationBounds", "correction outside page bounds rejected");
+        foreach (var profile in new[] { "epson-et8500", "canon-mf210" })
+        foreach (var grayscale in new[] { false, true })
+        {
+            var ticket = PrintService.CreateTicket(null, snapshot.Layout, 2, profile, grayscale);
+            Check(ticket.OutputColor == (profile == "canon-mf210" || grayscale ? System.Printing.OutputColor.Monochrome : System.Printing.OutputColor.Color),
+                profile + " shared artwork/calibration color policy " + grayscale);
+            Check(ticket.PageScalingFactor == 100 && ticket.Duplexing == System.Printing.Duplexing.OneSided && ticket.CopyCount == 2,
+                "shared ticket preserves scale/simplex/copies");
+        }
+    }
+
+    private static void CheckValidatedTicketParity(System.Printing.PrintQueue queue, string profile)
+    {
+        foreach (var orientation in new[] { OrientationMode.Portrait, OrientationMode.Landscape })
+        foreach (var grayscale in new[] { false, true })
+        {
+            var paper = new PaperSpec(MarginInches: .25m, Orientation: orientation);
+            var artwork = LayoutEngine.Calculate(new(24, 18), paper);
+            var calibration = CalibrationFixture.Layout(paper);
+            var basis = queue.DefaultPrintTicket;
+            var artworkTicket = queue.MergeAndValidatePrintTicket(basis, PrintService.CreateTicket(basis, artwork, 2, profile, grayscale)).ValidatedPrintTicket;
+            var calibrationTicket = queue.MergeAndValidatePrintTicket(basis, PrintService.CreateTicket(basis, calibration, 1, profile, grayscale)).ValidatedPrintTicket;
+            string fingerprint = PrintService.ValidatedSettingsFingerprint(queue, artworkTicket, artwork);
+            Check(fingerprint == PrintService.ValidatedSettingsFingerprint(queue, calibrationTicket, calibration),
+                queue.FullName + " validated calibration/artwork ticket parity " + orientation + " grayscale=" + grayscale);
+            Console.WriteLine($"  shared {orientation}, grayscale={grayscale}: output={artworkTicket.OutputColor}; fingerprint={fingerprint[..12]}");
+        }
+    }
+
     private static BitmapSource CreateFixture(string path)
     {
         const int width=1000,height=750;

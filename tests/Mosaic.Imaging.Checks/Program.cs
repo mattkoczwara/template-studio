@@ -8,6 +8,7 @@ using Mosaic.Imaging;
 using Mosaic.Core;
 
 var root = Path.GetFullPath("artifacts/ai-smoke"); Directory.CreateDirectory(root);
+if(args.Contains("--cache-only")){await CacheBudgetChecks.RunAsync(root);return;}
 var runId = Guid.NewGuid().ToString("N");
 var images = new ImageService(Path.Combine(root,"cache"));
 string fixture = Path.Combine(root,"artwork.png");
@@ -113,6 +114,7 @@ if(!File.Exists(source.OriginalPath)||!File.Exists(source.NormalizedPath))throw 
 var summary=new{Passed=true,GpuSeconds=gpu,CpuSeconds=cpuSeconds,GpuCpuRmse=cpuDifference,GpuWorkerPeakBytes=enhancer.LastWorkerPeakBytes,CpuWorkerPeakBytes=cpu.LastWorkerPeakBytes,InputWidth=source.Width,InputHeight=source.Height,OutputWidth=ei.Width,OutputHeight=ei.Height,PreviewFrozen=preview.IsFrozen,Cancellation=cancelled,CancellationAfterInferenceMs=cancelLatency.ElapsedMilliseconds,CacheIntegrity=integrityRejected,SourceHashValidation=originalRejected,Formats=new[]{"PNG","JPEG","WebP","BMP"},PeakWorkingSet=Process.GetCurrentProcess().PeakWorkingSet64};
 File.WriteAllText(Path.Combine(root,"result.json"),JsonSerializer.Serialize(summary,new JsonSerializerOptions{WriteIndented=true}));
 Console.WriteLine(JsonSerializer.Serialize(summary));
+await CacheBudgetChecks.RunAsync(root);
 if(args.Contains("--large"))await ExtendedChecks.RunAsync(root,images);
 
 sealed class InlineProgress(Action<JobProgress> callback):IProgress<JobProgress>{public void Report(JobProgress value)=>callback(value);}

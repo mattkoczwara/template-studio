@@ -70,6 +70,7 @@ internal static class Lang
         ["OpenPdf"] = ("Open PDF", "Otwórz PDF"), ["ShowFolder"] = ("Show in folder", "Pokaż w folderze"),
         ["InvalidSize"] = ("Enter a number greater than 0 and no more than 120 inches.", "Wpisz liczbę większą od 0 i nie większą niż 120 cali."),
         ["InvalidMargin"] = ("Enter a margin from 0 to 2 inches.", "Wpisz margines od 0 do 2 cali."),
+        ["InvalidLayout"] = ("These settings require too many sheets. Reduce the size or margin, or choose another orientation.", "Te ustawienia wymagają zbyt wielu arkuszy. Zmniejsz rozmiar lub margines albo wybierz inną orientację."),
         ["Dirty"] = ("Save your changes before continuing?", "Zapisać zmiany przed kontynuowaniem?"),
         ["Discard"] = ("Discard changes", "Odrzuć zmiany"), ["ApplyTrim"] = ("Use trim mode", "Użyj przycinania"),
         ["ErrorTitle"] = ("Let’s try that again", "Spróbujmy jeszcze raz"),

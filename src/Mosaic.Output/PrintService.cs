@@ -36,23 +36,23 @@ public sealed class PrintService
     }
 
     public async Task<PrintResult> PrintAsync(RenderSnapshot snapshot, Window owner, string language = "en",
-        CalibrationRecord? calibration = null, IProgress<JobProgress>? progress = null, CancellationToken cancellationToken = default)
+        IReadOnlyList<CalibrationRecord>? calibrations = null, IProgress<JobProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!await _submission.WaitAsync(0, cancellationToken))
             throw new OutputException("busy", OutputText.Pick(language, "A print job is already being submitted.", "Trwa już wysyłanie zadania do drukarki."));
         try
         {
             owner.Dispatcher.VerifyAccess();
-            var bitmap = await LoadImageAsync(snapshot.ImagePath, snapshot.State.Grayscale || snapshot.State.PrinterProfile == "canon-mf210", cancellationToken);
+            var bitmap = await LoadImageAsync(snapshot.ImagePath, UsesGrayscale(snapshot.State.PrinterProfile, snapshot.State.Grayscale), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             string? preferredPrinter = await ResolvePreferredPrinterAsync(snapshot.State.PrinterName, snapshot.State.PrinterProfile, language, cancellationToken);
             var dialog = CreateDialog(snapshot.Layout, preferredPrinter, snapshot.State.Copies,
-                snapshot.State.Grayscale || snapshot.State.PrinterProfile == "canon-mf210");
+                snapshot.State.PrinterProfile, snapshot.State.Grayscale);
             if (dialog.ShowDialog() != true) return new(false, "", 0);
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new(0, "printer"));
             var settings = await ValidateDialogAsync(dialog, snapshot.Layout, language, cancellationToken);
-            var validCalibration = ValidateCalibration(calibration, snapshot, settings, language);
+            var validCalibration = ResolveCalibration(calibrations ?? [], snapshot, settings.PrinterName, settings.Driver, settings.Fingerprint, settings.Capabilities, language);
             var paginator = CreatePaginator(snapshot, bitmap, validCalibration);
             return await SubmitAsync(dialog, paginator, snapshot.State.Title, snapshot.Layout.PageCount, language, settings, progress, cancellationToken);
         }
@@ -66,7 +66,8 @@ public sealed class PrintService
     }
 
     public async Task<PrintResult> PrintCalibrationAsync(PaperSpec paper, Window owner, string language = "en", string? printerName = null,
-        IProgress<JobProgress>? progress = null, CancellationToken cancellationToken = default)
+        IProgress<JobProgress>? progress = null, CancellationToken cancellationToken = default,
+        string profile = "epson-et8500", bool grayscale = false)
     {
         if (!await _submission.WaitAsync(0, cancellationToken)) throw new OutputException("busy", OutputText.Pick(language,
             "A print job is already being submitted.", "Trwa już wysyłanie zadania do drukarki."));
@@ -74,8 +75,8 @@ public sealed class PrintService
         {
             owner.Dispatcher.VerifyAccess();
             var layout = CalibrationFixture.Layout(paper);
-            string? preferredPrinter = await ResolvePreferredPrinterAsync(printerName, "epson-et8500", language, cancellationToken);
-            var dialog = CreateDialog(layout, preferredPrinter, 1, false);
+            string? preferredPrinter = await ResolvePreferredPrinterAsync(printerName, profile, language, cancellationToken);
+            var dialog = CreateDialog(layout, preferredPrinter, 1, profile, grayscale);
             if (dialog.ShowDialog() != true) return new(false, "", 0);
             progress?.Report(new(0, "printer"));
             var settings = await ValidateDialogAsync(dialog, layout, language, cancellationToken);
@@ -142,7 +143,7 @@ public sealed class PrintService
         return gray;
     }, token);
 
-    private static PrintDialog CreateDialog(LayoutPlan layout, string? printerName, int copies, bool grayscale)
+    private static PrintDialog CreateDialog(LayoutPlan layout, string? printerName, int copies, string profile, bool grayscale)
     {
         var dialog = new PrintDialog { UserPageRangeEnabled = false, SelectedPagesEnabled = false, CurrentPageEnabled = false };
         if (!string.IsNullOrWhiteSpace(printerName))
@@ -150,17 +151,24 @@ public sealed class PrintService
             try { dialog.PrintQueue = new PrintQueue(new LocalPrintServer(), printerName); }
             catch (PrintSystemException) { }
         }
-        var ticket = dialog.PrintTicket?.Clone() ?? new PrintTicket();
+        dialog.PrintTicket = CreateTicket(dialog.PrintTicket, layout, copies, profile, grayscale);
+        return dialog;
+    }
+
+    internal static bool UsesGrayscale(string profile, bool grayscale) => grayscale || profile == "canon-mf210";
+
+    internal static PrintTicket CreateTicket(PrintTicket? basis, LayoutPlan layout, int copies, string profile, bool grayscale)
+    {
+        var ticket = basis?.Clone() ?? new PrintTicket();
         ticket.PageOrientation = layout.Orientation == SheetOrientation.Portrait ? PageOrientation.Portrait : PageOrientation.Landscape;
         // PrintSchema Letter remains its unrotated dimensions; PageOrientation rotates it once.
         ticket.PageMediaSize = new PageMediaSize(PageMediaSizeName.NorthAmericaLetter);
         ticket.Duplexing = Duplexing.OneSided;
         ticket.CopyCount = Math.Clamp(copies, 1, 99);
-        ticket.OutputColor = grayscale ? OutputColor.Monochrome : OutputColor.Color;
+        ticket.OutputColor = UsesGrayscale(profile, grayscale) ? OutputColor.Monochrome : OutputColor.Color;
         ticket.PageScalingFactor = 100;
         ticket.PageBorderless = layout.Paper.MarginInches == 0 ? PageBorderless.Borderless : PageBorderless.None;
-        dialog.PrintTicket = ticket;
-        return dialog;
+        return ticket;
     }
 
     public static decimal RequiredMargin(PrintCapabilities capabilities, LayoutPlan layout)
@@ -221,7 +229,17 @@ public sealed class PrintService
             throw new OutputException("borderless", OutputText.Pick(language,
                 "Enable borderless Letter printing in printer properties, or choose precision trim mode. Check expansion with a calibration test.",
                 "W ustawieniach drukarki włącz druk Letter bez marginesów albo wybierz tryb przycinania. Sprawdź powiększenie wydrukiem kalibracyjnym."), .25m);
-        return new(queue.FullName, queue.QueueDriver.Name, SettingsFingerprint(ticket, layout), ticket, caps);
+        return new(queue.FullName, queue.QueueDriver.Name, ValidatedSettingsFingerprint(queue, ticket, layout), ticket, caps);
+    }
+
+    internal static string ValidatedSettingsFingerprint(PrintQueue queue, PrintTicket ticket, LayoutPlan layout)
+    {
+        // IPP drivers can also encode copies inside opaque vendor DEVMODE data. Ask the driver
+        // to normalize quantity, retaining all media/quality/expansion settings in the hash.
+        var oneCopy = ticket.Clone();
+        oneCopy.CopyCount = 1;
+        var normalized = queue.MergeAndValidatePrintTicket(ticket, oneCopy).ValidatedPrintTicket;
+        return SettingsFingerprint(normalized, layout);
     }
 
     private static bool HasFitScaling(PrintTicket ticket)
@@ -247,20 +265,24 @@ public sealed class PrintService
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     }
 
-    private static CalibrationRecord? ValidateCalibration(CalibrationRecord? record, RenderSnapshot snapshot, ValidatedSettings settings, string language)
+    internal static CalibrationRecord? ResolveCalibration(IReadOnlyList<CalibrationRecord> records, RenderSnapshot snapshot,
+        string printerName, string driver, string fingerprint, PrintCapabilities capabilities, string language = "en")
     {
-        if (record is null || !record.Enabled) return null;
-        bool match = record.Pathway == "direct" && record.PrinterName == settings.PrinterName &&
-            record.Profile == snapshot.State.PrinterProfile && record.Driver == settings.Driver && record.Orientation == snapshot.Layout.Orientation &&
-            record.DriverFingerprint == settings.Fingerprint;
-        if (!match) throw new OutputException("calibrationMismatch", OutputText.Pick(language,
+        // Saved project printer names are preferences only. Match the queue the user actually selected.
+        var candidates = records.Where(record => record.Enabled && record.Pathway == "direct" &&
+            record.PrinterName == printerName && record.Profile == snapshot.State.PrinterProfile &&
+            record.Orientation == snapshot.Layout.Orientation).ToList();
+        if (candidates.Count == 0) return null;
+        var record = candidates.Where(record => record.Driver == driver && record.DriverFingerprint == fingerprint &&
+            !string.IsNullOrWhiteSpace(record.DriverFingerprint)).OrderByDescending(record => record.MeasuredAt).FirstOrDefault();
+        if (record is null) throw new OutputException("calibrationMismatch", OutputText.Pick(language,
             "This calibration belongs to another printer, driver, orientation or print method. Disable it or calibrate the selected settings.",
             "Ta kalibracja dotyczy innej drukarki, sterownika, orientacji lub metody druku. Wyłącz ją albo skalibruj wybrane ustawienia."));
         if (record.EdgeClipping || record.MeasuredXInches is < 3.6m or > 4.4m || record.MeasuredYInches is < 3.6m or > 4.4m)
             throw new OutputException("calibrationClipping", OutputText.Pick(language,
                 "Clipped edges or unusually large corrections cannot guarantee joins. Use precision trim mode and repeat calibration.",
                 "Przy obciętych krawędziach lub dużej korekcie nie można zapewnić łączenia. Wybierz tryb przycinania i powtórz kalibrację."), .25m);
-        var area = settings.Capabilities.PageImageableArea;
+        var area = capabilities.PageImageableArea;
         decimal minX = area is null ? 0 : (decimal)area.OriginWidth / 96;
         decimal minY = area is null ? 0 : (decimal)area.OriginHeight / 96;
         decimal maxX = area is null ? snapshot.Layout.PageWidth : (decimal)(area.OriginWidth + area.ExtentWidth) / 96;

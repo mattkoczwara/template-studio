@@ -20,11 +20,15 @@ public partial class MainWindow : Window
     private readonly EnhancementService enhancement;
     private readonly ProjectStore projects;
     private readonly PreferencesStore settings;
+    private readonly RecoverySession recovery;
+    private RecoveryLease? pendingRecovery;
+    private bool pendingRecoveryRestored;
     private readonly PdfExporter pdf = new();
     private readonly PrintService printer = new();
     private AppPreferences preferences;
     private ProjectState state = new();
     private SourceInfo? source;
+    private IDisposable? sourceLease;
     private LayoutPlan? layout;
     private string? enhancedPath, projectPath, completedPdf;
     private RenderSnapshot? completedSnapshot;
@@ -34,7 +38,7 @@ public partial class MainWindow : Window
     private long revision, recoveredRevision = -1;
     private Task? recoveryTask;
     private readonly CancellationTokenSource recoveryCancellation = new();
-    private bool dimensionInvalid, marginInvalid;
+    private bool dimensionInvalid, marginInvalid, layoutInvalid;
     private bool widthTextEdited, heightTextEdited;
     private readonly List<ProjectState> undoStates = [], redoStates = [];
     private ProjectState historyAnchor = new();
@@ -47,6 +51,7 @@ public partial class MainWindow : Window
         enhancement = new();
         projects = new(dataRoot == null ? null : Path.Combine(dataRoot, "project-cache"));
         settings = new(dataRoot);
+        recovery = new(settings.RootPath);
         arguments = args;
         preferences = settings.Load();
         var lang = args.Contains("--pl") ? "pl" : args.Contains("--en") ? "en" : preferences.Language;
@@ -77,7 +82,8 @@ public partial class MainWindow : Window
         App.FitOnScreen(this);
         UpdateRecent();
         if (arguments.Contains("--checks")) return;
-        if (File.Exists(settings.RecoveryPath)) ShowNotice(true);
+        pendingRecovery = recovery.ClaimPending();
+        if (pendingRecovery != null) ShowNotice(true);
         else if (!preferences.CalibrationPromptDismissed) ShowNotice(false);
         var path = arguments.FirstOrDefault(a => !a.StartsWith("--") && File.Exists(a));
         if (path != null)
@@ -95,8 +101,20 @@ public partial class MainWindow : Window
     }
     private async void NoticeActionClick(object sender, RoutedEventArgs e)
     {
-        if (recovering) { NoticeBar.Visibility = Visibility.Collapsed; await OpenProjectAsync(settings.RecoveryPath, true); }
+        if (recovering) await RestoreRecoveryAsync();
         else ShowCalibration();
+    }
+    private async Task<bool> RestoreRecoveryAsync()
+    {
+        if (pendingRecovery == null || !await AllowReplaceAsync()) return false;
+        if (recoveryTask != null) await recoveryTask;
+        if (!await OpenProjectAsync(pendingRecovery.Path, true)) return false;
+        pendingRecoveryRestored = true;
+        NoticeBar.Visibility = Visibility.Collapsed;
+        // Preserve the prior snapshot until its replacement is safely checkpointed.
+        recoveryTask = RecoverEditsAsync();
+        await recoveryTask;
+        return true;
     }
     private void NoticeLaterClick(object sender, RoutedEventArgs e)
     {
@@ -118,15 +136,21 @@ public partial class MainWindow : Window
         await RunJobAsync("Importing", async token =>
         {
             var imported = await images.ImportAsync(path, token);
-            var preview = await images.GetPreviewAsync(imported.NormalizedPath, ct: token);
-            token.ThrowIfCancellationRequested();
-            source = imported; enhancedPath = projectPath = null;
-            dimensionInvalid = marginInvalid = false; ShowValidation();
-            state = new ProjectState { Title = Path.GetFileNameWithoutExtension(path), Size = LayoutEngine.Proportional(24, true, imported.Width, imported.Height) };
-            if (state.Size.HeightInches > 120) state = state with { Size = LayoutEngine.Proportional(24, false, imported.Width, imported.Height) };
-            Preview.Image = preview; Preview.Fit(); compareOriginal = false;
-            dirty = true; revision++;
-            SyncControls(); ResetHistory(); Completion.Visibility = Visibility.Collapsed; Status.Text = Lang.T("ImageReady");
+            IDisposable? importedLease = await images.PreserveSourceAsync(imported.Sha256, token);
+            try
+            {
+                var preview = await images.GetPreviewAsync(imported.NormalizedPath, ct: token);
+                token.ThrowIfCancellationRequested();
+                sourceLease?.Dispose(); sourceLease = importedLease; importedLease = null;
+                source = imported; enhancedPath = projectPath = null;
+                dimensionInvalid = marginInvalid = layoutInvalid = false; ShowValidation();
+                state = new ProjectState { Title = Path.GetFileNameWithoutExtension(path), Size = LayoutEngine.Proportional(24, true, imported.Width, imported.Height) };
+                if (state.Size.HeightInches > 120) state = state with { Size = LayoutEngine.Proportional(24, false, imported.Width, imported.Height) };
+                Preview.Image = preview; Preview.Fit(); compareOriginal = false;
+                dirty = true; revision++;
+                SyncControls(); ResetHistory(); Completion.Visibility = Visibility.Collapsed; Status.Text = Lang.T("ImageReady");
+            }
+            finally { importedLease?.Dispose(); }
         });
     }
     private async void FileDrop(object sender, DragEventArgs e)
@@ -200,7 +224,7 @@ public partial class MainWindow : Window
         bool editable = source != null && job == null;
         OrientationBox.IsEnabled = editable; LanguageBox.IsEnabled = job == null;
         EditorRail.IsEnabled = editable;
-        PrintButton.IsEnabled = ExportButton.IsEnabled = editable && !dimensionInvalid && !marginInvalid;
+        PrintButton.IsEnabled = ExportButton.IsEnabled = editable && !dimensionInvalid && !marginInvalid && !layoutInvalid;
         EnhanceButton.IsEnabled = editable;
     }
     private void Changed()
@@ -227,7 +251,7 @@ public partial class MainWindow : Window
             var imagePath = previous.Quality == QualityMode.Enhanced && enhancedPath != null ? enhancedPath : source.NormalizedPath;
             var bitmap = await images.GetPreviewAsync(imagePath, previous.Composition.Rotation, ct: token);
             to.Add(state); from.RemoveAt(from.Count - 1); state = previous;
-            dimensionInvalid = marginInvalid = false; dirty = true; revision++;
+            dimensionInvalid = marginInvalid = layoutInvalid = false; dirty = true; revision++;
             Preview.Image = bitmap; SyncControls(); historyAnchor = state; ShowValidation();
             Completion.Visibility = Visibility.Collapsed;
         });
@@ -243,11 +267,24 @@ public partial class MainWindow : Window
         int sh = state.Composition.Rotation % 180 == 0 ? source.Height : source.Width;
         var size = state.KeepProportions ? LayoutEngine.Proportional(value, width, sw, sh)
             : width ? state.Size with { WidthInches = value } : state.Size with { HeightInches = value };
-        if (size.WidthInches > 120 || size.HeightInches > 120) { dimensionInvalid = true; ShowValidation(); return false; }
         if (state.Size == size && state.LastDimension == (width ? "width" : "height")) { dimensionInvalid = false; ShowValidation(); return true; }
-        state = state with { Size = size, LastDimension = width ? "width" : "height" };
-        dimensionInvalid = false; ShowValidation();
+        if (!TryCommitLayout(state with { Size = size, LastDimension = width ? "width" : "height" })) return false;
         Changed(); SyncControls(); return true;
+    }
+    private bool TryCommitLayout(ProjectState candidate, bool sizeChange = true)
+    {
+        LayoutPlan candidateLayout;
+        try { candidateLayout = LayoutEngine.Calculate(candidate.Size, candidate.Paper); }
+        catch (ArgumentOutOfRangeException)
+        {
+            if (sizeChange) dimensionInvalid = true; else layoutInvalid = true;
+            ShowValidation(); return false;
+        }
+        state = candidate with { ResolvedOrientation = candidateLayout.Orientation };
+        layout = candidateLayout;
+        if (sizeChange) dimensionInvalid = false;
+        layoutInvalid = false; ShowValidation();
+        return true;
     }
     private void DimensionsCommitted(object sender, KeyboardFocusChangedEventArgs e) { if (!synchronizing && initialized) CommitDimension((TextBox)sender); }
     private void DimensionTextChanged(object sender, TextChangedEventArgs e)
@@ -257,8 +294,8 @@ public partial class MainWindow : Window
     }
     private void ShowValidation()
     {
-        SizeError.Text = Lang.T(dimensionInvalid ? "InvalidSize" : "InvalidMargin");
-        SizeError.Visibility = dimensionInvalid || marginInvalid ? Visibility.Visible : Visibility.Collapsed;
+        SizeError.Text = Lang.T(layoutInvalid ? "InvalidLayout" : dimensionInvalid ? "InvalidSize" : "InvalidMargin");
+        SizeError.Visibility = dimensionInvalid || marginInvalid || layoutInvalid ? Visibility.Visible : Visibility.Collapsed;
         RefreshEnabled();
     }
     private bool CommitPendingInputs()
@@ -270,19 +307,26 @@ public partial class MainWindow : Window
         if (Keyboard.FocusedElement == WidthBox) { if (!CommitDimension(WidthBox)) return false; }
         else if (Keyboard.FocusedElement == HeightBox) { if (!CommitDimension(HeightBox)) return false; }
         if (dimensionInvalid) return false;
-        return CommitMargin();
+        return CommitMargin() && !layoutInvalid;
     }
     private void DimensionKey(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { CommitDimension((TextBox)sender); e.Handled = true; } }
     private void LockChanged(object sender, RoutedEventArgs e)
     {
         if (!initialized || synchronizing || source == null) return;
-        state = state with { KeepProportions = LockCheck.IsChecked == true, Composition = state.Composition with { Mode = FitMode.Fit } };
-        if (state.KeepProportions)
+        var candidate = state with { KeepProportions = LockCheck.IsChecked == true, Composition = state.Composition with { Mode = FitMode.Fit } };
+        if (candidate.KeepProportions)
         {
             int w = state.Composition.Rotation % 180 == 0 ? source.Width : source.Height;
             int h = state.Composition.Rotation % 180 == 0 ? source.Height : source.Width;
             bool width = state.LastDimension != "height";
-            state = state with { Size = LayoutEngine.Proportional(width ? state.Size.WidthInches : state.Size.HeightInches, width, w, h) };
+            candidate = candidate with { Size = LayoutEngine.Proportional(width ? state.Size.WidthInches : state.Size.HeightInches, width, w, h) };
+        }
+        if (!TryCommitLayout(candidate))
+        {
+            synchronizing = true;
+            try { LockCheck.IsChecked = state.KeepProportions; }
+            finally { synchronizing = false; }
+            return;
         }
         Changed(); SyncControls();
     }
@@ -301,7 +345,14 @@ public partial class MainWindow : Window
     private void PaperChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!initialized || synchronizing || OrientationBox.SelectedIndex < 0) return;
-        state = state with { Paper = state.Paper with { Orientation = (OrientationMode)OrientationBox.SelectedIndex } }; Changed();
+        if (!TryCommitLayout(state with { Paper = state.Paper with { Orientation = (OrientationMode)OrientationBox.SelectedIndex } }, false))
+        {
+            synchronizing = true;
+            try { OrientationBox.SelectedIndex = (int)state.Paper.Orientation; }
+            finally { synchronizing = false; }
+            return;
+        }
+        Changed();
     }
     private void MarginCommitted(object sender, KeyboardFocusChangedEventArgs e) => CommitMargin();
     private void MarginKey(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) CommitMargin(); }
@@ -311,7 +362,11 @@ public partial class MainWindow : Window
         if (!decimal.TryParse(MarginBox.Text, NumberStyles.AllowDecimalPoint, Lang.Culture, out var value) || value < 0 || value > 2)
         { marginInvalid = true; ShowValidation(); return false; }
         marginInvalid = false; ShowValidation();
-        if (state.Paper.MarginInches != value) { state = state with { Paper = state.Paper with { MarginInches = value } }; Changed(); }
+        if (state.Paper.MarginInches != value)
+        {
+            if (!TryCommitLayout(state with { Paper = state.Paper with { MarginInches = value } }, false)) return false;
+            Changed();
+        }
         return true;
     }
     private void ProfileChanged(object sender, SelectionChangedEventArgs e)
@@ -319,7 +374,7 @@ public partial class MainWindow : Window
         if (!initialized || synchronizing) return;
         bool canon = ProfileBox.SelectedIndex == 1;
         marginInvalid = false; ShowValidation();
-        state = state with { PrinterProfile = canon ? "canon-mf210" : "epson-et8500", PrinterName = null, Paper = state.Paper with { MarginInches = canon ? .25m : 0 } };
+        if (!TryCommitLayout(state with { PrinterProfile = canon ? "canon-mf210" : "epson-et8500", PrinterName = null, Paper = state.Paper with { MarginInches = canon ? .25m : 0 } }, false)) return;
         Changed(); SyncControls();
     }
     private void OptionChanged(object sender, RoutedEventArgs e)
@@ -335,8 +390,9 @@ public partial class MainWindow : Window
         {
             int rotation = (state.Composition.Rotation + 90) % 360;
             var image = await images.GetPreviewAsync(ActiveImage(), rotation, ct: token);
-            state = state with { Composition = state.Composition with { Rotation = rotation } };
-            if (state.KeepProportions) state = state with { Size = new(state.Size.HeightInches, state.Size.WidthInches) };
+            var candidate = state with { Composition = state.Composition with { Rotation = rotation } };
+            if (state.KeepProportions) candidate = candidate with { Size = new(state.Size.HeightInches, state.Size.WidthInches) };
+            if (!TryCommitLayout(candidate, false)) return;
             Preview.Image = image; Preview.Fit(); Changed(); SyncControls();
         });
     }
@@ -394,6 +450,8 @@ public partial class MainWindow : Window
     private async Task<RenderSnapshot> SnapshotAsync(CancellationToken token)
     {
         if (source == null || layout == null) throw new InvalidOperationException();
+        if (dimensionInvalid || marginInvalid || layoutInvalid || layout.Artwork != state.Size || layout.Paper != state.Paper || layout.Orientation != state.ResolvedOrientation)
+            throw new InvalidOperationException(Lang.T("InvalidSize"));
         if (state.Quality == QualityMode.Enhanced && enhancedPath == null)
             enhancedPath = await enhancement.EnhanceAsync(source, JobProgress(), token, CpuCheck.IsChecked == true);
         var outputPath = await images.GetOutputImageAsync(source, state.Composition.Rotation, state.Quality == QualityMode.Enhanced ? enhancedPath : null, token);
@@ -419,8 +477,7 @@ public partial class MainWindow : Window
         await RunJobAsync("Printing", async token =>
         {
             var snapshot = await SnapshotAsync(token);
-            var calibration = preferences.Calibrations.LastOrDefault(c => c.Enabled && c.Pathway == "direct" && c.PrinterName == state.PrinterName && c.Profile == state.PrinterProfile && c.Orientation == layout!.Orientation);
-            var result = await printer.PrintAsync(snapshot, this, Lang.Language, calibration, JobProgress(), token);
+            var result = await printer.PrintAsync(snapshot, this, Lang.Language, preferences.Calibrations, JobProgress(), token);
             if (!result.Submitted) return;
             state = state with { PrinterName = result.PrinterName }; Changed();
             completedSnapshot = snapshot; completedPrinter = result.PrinterName;
@@ -435,7 +492,7 @@ public partial class MainWindow : Window
         bool exported = completedPrinter == null && completedPdf != null;
         CompletionTitle.Text = Lang.T(exported ? "ExportedTitle" : "SentTitle");
         CompletionFile.Text = exported ? Path.GetFileName(completedPdf!) : completedPrinter;
-        CompletionBody.Text = exported ? summary + $" · {new FileInfo(completedPdf!).Length / 1048576d:0.0} MB\n\n" + Lang.T(saved.Paper.MarginInches > 0 ? "TrimHint" : "ActualSize") + (saved.Composition.Mode == FitMode.Fit && !saved.KeepProportions ? "\n" + Lang.T("FitHint") : "") : Lang.T("SentBody") + "\n\n" + summary;
+        CompletionBody.Text = exported ? summary + $" · {new FileInfo(completedPdf!).Length / 1048576d:0.0} MB\n\n" + Lang.T("ActualSize") + (saved.Paper.MarginInches > 0 ? "\n" + Lang.T("TrimHint") : "") + (saved.Composition.Mode == FitMode.Fit && !saved.KeepProportions ? "\n" + Lang.T("FitHint") : "") : Lang.T("SentBody") + "\n\n" + summary;
         OpenPdfButton.Visibility = ShowFolderButton.Visibility = exported ? Visibility.Visible : Visibility.Collapsed;
         Completion.Visibility = Visibility.Visible;
     }
@@ -451,7 +508,7 @@ public partial class MainWindow : Window
         {
             LocalLog.Write(label + "_failed", ex.Code);
             if (ex.SuggestedMarginInches is decimal margin && margin <= 2 && QuestionWindow.Ask(this, Lang.F("TrimOffer", margin.ToString("0.###", Lang.Culture)), false) == UserChoice.Apply)
-            { state = state with { Paper = state.Paper with { MarginInches = margin } }; Changed(); SyncControls(); }
+            { if (TryCommitLayout(state with { Paper = state.Paper with { MarginInches = margin } }, false)) { Changed(); SyncControls(); } }
             else MessageBox.Show(this, ex.Message, Lang.T("ErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
@@ -462,6 +519,7 @@ public partial class MainWindow : Window
             {
                 ImagePipelineException { Code: "cacheFull" or "diskFull" } => "CacheFull",
                 ImagePipelineException => "ImageError",
+                EnhancementException { Code: "cacheFull" or "diskFull" } => "CacheFull",
                 EnhancementException { Code: "aiSourceTooLarge" } => "AiLimit",
                 EnhancementException { Code: "aiIntegrity" or "aiMissing" } => "AiIntegrity",
                 EnhancementException => "AiError",
@@ -509,27 +567,33 @@ public partial class MainWindow : Window
             preferences = settings.AddRecent(target); UpdateRecent(); RefreshLayout(); Status.Text = Lang.T("Saved");
         });
     }
-    private async Task OpenProjectAsync(string path, bool recovered = false)
+    private async Task<bool> OpenProjectAsync(string path, bool recovered = false)
     {
-        await RunJobAsync("Opening", async token =>
+        return await RunJobAsync("Opening", async token =>
         {
             var opened = await projects.OpenAsync(path, token);
             var imported = await images.ImportAsync(opened.OriginalPath, token);
-            var image = await images.GetPreviewAsync(imported.NormalizedPath, opened.State.Composition.Rotation, ct: token);
-            var openedState = opened.State; string? openedEnhanced = null;
-            // Derived AI caches are reproducible and remain outside portable projects.
-            bool aiFallback = false;
-            if (openedState.Quality == QualityMode.Enhanced)
+            IDisposable? importedLease = await images.PreserveSourceAsync(imported.Sha256, token);
+            try
             {
-                try { openedEnhanced = await enhancement.EnhanceAsync(imported, JobProgress(), token); image = await images.GetPreviewAsync(openedEnhanced, openedState.Composition.Rotation, ct: token); }
-                catch (EnhancementException) { openedState = openedState with { Quality = QualityMode.Standard }; aiFallback = true; }
+                var image = await images.GetPreviewAsync(imported.NormalizedPath, opened.State.Composition.Rotation, ct: token);
+                var openedState = opened.State; string? openedEnhanced = null;
+                // Derived AI caches are reproducible and remain outside portable projects.
+                bool aiFallback = false;
+                if (openedState.Quality == QualityMode.Enhanced)
+                {
+                    try { openedEnhanced = await enhancement.EnhanceAsync(imported, JobProgress(), token); image = await images.GetPreviewAsync(openedEnhanced, openedState.Composition.Rotation, ct: token); }
+                    catch (EnhancementException) { openedState = openedState with { Quality = QualityMode.Standard }; aiFallback = true; }
+                }
+                token.ThrowIfCancellationRequested();
+                sourceLease?.Dispose(); sourceLease = importedLease; importedLease = null;
+                source = imported; state = openedState; enhancedPath = openedEnhanced; compareOriginal = false;
+                projectPath = recovered ? null : path; dirty = recovered || aiFallback; revision++; Preview.Image = image; Preview.Fit();
+                if (!recovered) preferences = settings.AddRecent(path);
+                dimensionInvalid = marginInvalid = layoutInvalid = false; ShowValidation();
+                SyncControls(); ResetHistory(); UpdateRecent(); Completion.Visibility = Visibility.Collapsed; Status.Text = Lang.T(aiFallback ? "AiError" : "Ready");
             }
-            token.ThrowIfCancellationRequested();
-            source = imported; state = openedState; enhancedPath = openedEnhanced; compareOriginal = false;
-            projectPath = recovered ? null : path; dirty = recovered || aiFallback; revision++; Preview.Image = image; Preview.Fit();
-            if (!recovered) preferences = settings.AddRecent(path);
-            dimensionInvalid = marginInvalid = false; ShowValidation();
-            SyncControls(); ResetHistory(); UpdateRecent(); Completion.Visibility = Visibility.Collapsed; Status.Text = Lang.T(aiFallback ? "AiError" : "Ready");
+            finally { importedLease?.Dispose(); }
         });
     }
     private async Task<bool> AllowReplaceAsync()
@@ -543,7 +607,12 @@ public partial class MainWindow : Window
     {
         if (source == null || !dirty || revision == recoveredRevision || job != null) return;
         var snapshotRevision = revision; var savedState = state; var savedSource = source;
-        try { await projects.SaveAsync(settings.RecoveryPath, savedState, savedSource, recoveryCancellation.Token); recoveredRevision = snapshotRevision; }
+        try
+        {
+            await projects.SaveAsync(recovery.RecoveryPath, savedState, savedSource, recoveryCancellation.Token);
+            recoveredRevision = snapshotRevision;
+            if (pendingRecoveryRestored) { pendingRecovery?.Resolve(); pendingRecovery = null; pendingRecoveryRestored = false; }
+        }
         catch (OperationCanceledException) { }
         catch (Exception ex) { LocalLog.Write("recovery_failed", ex.GetType().Name); }
     }
@@ -555,9 +624,20 @@ public partial class MainWindow : Window
         if (!await AllowReplaceAsync()) return;
         closing = true; recoveryTimer.Stop(); recoveryCancellation.Cancel();
         if (recoveryTask != null) await recoveryTask;
-        // A normal close has an explicit save/discard decision; recovery is only for interruptions.
-        try { File.Delete(settings.RecoveryPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        FinishRecovery();
         Close();
+    }
+    private void FinishRecovery()
+    {
+        // Only this session's edits have received a save/discard decision.
+        try
+        {
+            recovery.DeleteOwned();
+            if (pendingRecoveryRestored) pendingRecovery?.Resolve();
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        finally { pendingRecovery?.Dispose(); pendingRecovery = null; recovery.Dispose(); sourceLease?.Dispose(); sourceLease = null; }
     }
     private void UpdateRecent()
     {
@@ -587,13 +667,13 @@ public partial class MainWindow : Window
         if (job != null) return;
         var calibrationPaper = state.Paper with { Orientation = layout?.Orientation == SheetOrientation.Landscape ? OrientationMode.Landscape : OrientationMode.Portrait };
         var prior = preferences.Calibrations.LastOrDefault(c => c.Profile == state.PrinterProfile && c.Orientation == (layout?.Orientation ?? SheetOrientation.Portrait));
-        var dialog = new CalibrationWindow(calibrationPaper, state.PrinterProfile, prior, pdf, printer) { Owner = this };
+        var dialog = new CalibrationWindow(calibrationPaper, state.PrinterProfile, prior, pdf, printer, state.Grayscale) { Owner = this };
         if (dialog.ShowDialog() == true && dialog.Record != null)
         {
             preferences = preferences with { Calibrations = preferences.Calibrations.Where(c => !(c.PrinterName == dialog.Record.PrinterName && c.Pathway == dialog.Record.Pathway && c.Profile == dialog.Record.Profile && c.Orientation == dialog.Record.Orientation)).Append(dialog.Record).ToList(), CalibrationPromptDismissed = true };
             state = state with { PrinterName = dialog.Record.PrinterName };
             SavePreferences(); NoticeBar.Visibility = Visibility.Collapsed;
-            if (dialog.Record.EdgeClipping) { state = state with { Paper = state.Paper with { MarginInches = Math.Max(state.Paper.MarginInches, .25m) } }; Changed(); SyncControls(); }
+            if (dialog.Record.EdgeClipping && TryCommitLayout(state with { Paper = state.Paper with { MarginInches = Math.Max(state.Paper.MarginInches, .25m) } }, false)) { Changed(); SyncControls(); }
             RefreshLayout();
         }
     }

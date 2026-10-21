@@ -16,7 +16,6 @@ public sealed class PreferencesStore
 {
     private readonly object _gate = new();
     public string RootPath { get; }
-    public string RecoveryPath => Path.Combine(RootPath, "recovery.mosaic");
     private string SettingsPath => Path.Combine(RootPath, "settings.json");
     public PreferencesStore(string? root = null) => RootPath = root ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MosaicTemplateStudio");

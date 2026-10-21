@@ -10,6 +10,7 @@ Start with the [project overview and first-template guide](../README.md).
 | Build, install or verify a package | [Windows distribution](DISTRIBUTION.md) |
 | Understand how the code fits together | [Implemented architecture](IMPLEMENTATION.md) |
 | Check implementation and remaining validation | [Acceptance map](ACCEPTANCE.md) |
+| Check the independent review and fixes | [Review resolution](CODE_REVIEW_RESOLUTION.md) |
 | Review versions and redistribution terms | [Dependencies](DEPENDENCIES.md) · [Third-party notices](../THIRD-PARTY-NOTICES.md) |
 | Contribute a fix | [Contribution guide](../CONTRIBUTING.md) |
 

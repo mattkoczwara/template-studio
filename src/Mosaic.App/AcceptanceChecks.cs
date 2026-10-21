@@ -6,12 +6,13 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Mosaic.Core;
+using Mosaic.Storage;
 
 namespace Mosaic.App;
 
 public partial class MainWindow
 {
-    internal void FinishChecks() { closing = true; dirty = false; recoveryTimer.Stop(); recoveryCancellation.Cancel(); }
+    internal void FinishChecks() { closing = true; dirty = false; recoveryTimer.Stop(); recoveryCancellation.Cancel(); pendingRecovery?.Dispose(); recovery.Dispose(); sourceLease?.Dispose(); }
     // Runs the real editor operations on its dispatcher, with isolated files/settings. No printer jobs.
     internal async Task<int> RunAcceptanceChecksAsync(string directory)
     {
@@ -93,6 +94,47 @@ public partial class MainWindow
         FitBox.SelectedIndex = 0;
         LockCheck.IsChecked = true;
         Check(state.Size.HeightInches == 24 && state.Size.WidthInches == 32, "relock preserves last edited height");
+        LockCheck.IsChecked = false;
+        HeightBox.Text = "120"; CommitDimension(HeightBox);
+        var validState = state; var validLayout = layout; int validHistory = undoStates.Count;
+        LockCheck.IsChecked = true;
+        Check(state == validState && ReferenceEquals(layout, validLayout) && LockCheck.IsChecked == false && undoStates.Count == validHistory,
+            "invalid height-authority relock preserves state layout and history");
+        Check(dimensionInvalid && !ExportButton.IsEnabled && !CommitPendingInputs(), "invalid relock blocks output with inline validation");
+        bool snapshotRejected = false;
+        try { await SnapshotAsync(CancellationToken.None); } catch (InvalidOperationException) { snapshotRejected = true; }
+        Check(snapshotRejected, "snapshot rejects invalid pending size");
+        HeightBox.Text = "24"; CommitDimension(HeightBox);
+        source = source with { Width = 750, Height = 1000 };
+        WidthBox.Text = "120"; CommitDimension(WidthBox);
+        validState = state; validLayout = layout;
+        LockCheck.IsChecked = true;
+        Check(state == validState && ReferenceEquals(layout, validLayout) && !state.KeepProportions,
+            "invalid width-authority relock preserves state and layout");
+        source = actualSource;
+        WidthBox.Text = "24"; CommitDimension(WidthBox);
+        LockCheck.IsChecked = true;
+        var coherentState = state;
+        state = state with { Size = new(25, 18) };
+        snapshotRejected = false;
+        try { await SnapshotAsync(CancellationToken.None); } catch (InvalidOperationException) { snapshotRejected = true; }
+        Check(snapshotRejected, "snapshot refuses stale geometry even without validation flag");
+        state = coherentState; SyncControls();
+        LockCheck.IsChecked = false;
+        WidthBox.Text = "120"; CommitDimension(WidthBox);
+        HeightBox.Text = "104"; CommitDimension(HeightBox);
+        MarginBox.Text = "1.95"; CommitMargin();
+        validState = state; validLayout = layout;
+        OrientationBox.SelectedIndex = (int)OrientationMode.Portrait;
+        Check(state == validState && ReferenceEquals(layout, validLayout) && layoutInvalid && OrientationBox.SelectedIndex == 0,
+            "rejected sheet-limit orientation preserves coherent state and control");
+        MarginBox.Text = "2";
+        Check(!CommitMargin() && state == validState && ReferenceEquals(layout, validLayout), "sheet-limit margin validates before mutation");
+        MarginBox.Text = "0"; CommitMargin();
+        Check(!layoutInvalid && ExportButton.IsEnabled, "valid margin recovers sheet-limit validation");
+        WidthBox.Text = "24"; CommitDimension(WidthBox);
+        HeightBox.Text = "18"; CommitDimension(HeightBox);
+        LockCheck.IsChecked = true;
         Lang.Apply("pl"); LanguageBox.SelectedIndex = 1;
         WidthBox.Text = "24,125"; CommitDimension(WidthBox);
         Check(state.Size.WidthInches == 24.125m && HeightBox.Text.Contains(','), "decimal comma journey");
@@ -150,9 +192,39 @@ public partial class MainWindow
         Check(state.Quality == QualityMode.Standard && layout!.Artwork == enhancedGeometry!.Artwork, "standard reversion preserves physical geometry");
         // Recovery writes the same portable format, once per revision.
         dirty = true; await RecoverEditsAsync();
-        Check(File.Exists(settings.RecoveryPath) && recoveredRevision == revision, "recoverable edits");
-        var recovered = await projects.OpenAsync(settings.RecoveryPath);
+        Check(File.Exists(recovery.RecoveryPath) && recoveredRevision == revision, "recoverable edits");
+        var recovered = await projects.OpenAsync(recovery.RecoveryPath);
         Check(recovered.State.Size == state.Size, "recovery includes current geometry");
+        using (var interrupted = new RecoverySession(settings.RootPath))
+        {
+            await projects.SaveAsync(interrupted.RecoveryPath, state, source);
+            interrupted.Dispose();
+            pendingRecovery = recovery.ClaimPending(); ShowNotice(true);
+            WidthBox.Text = "30"; CommitDimension(WidthBox);
+            _ = Dispatcher.BeginInvoke(() => OwnedWindows.OfType<QuestionWindow>().Single().Close(), DispatcherPriority.Background);
+            Check(!await RestoreRecoveryAsync() && state.Size.WidthInches == 30 && dirty && File.Exists(interrupted.RecoveryPath),
+                "restore Cancel preserves current dirty edits and prior recovery");
+            _ = Dispatcher.BeginInvoke(() => OwnedWindows.OfType<QuestionWindow>().Single().DiscardButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)), DispatcherPriority.Background);
+            Check(await RestoreRecoveryAsync() && state.Size.WidthInches == recovered.State.Size.WidthInches && dirty,
+                "restore requires explicit dirty-document replacement choice");
+            Check(!File.Exists(interrupted.RecoveryPath) && File.Exists(recovery.RecoveryPath), "restored prior recovery resolves only after owned checkpoint");
+        }
+        using (var interrupted = new RecoverySession(settings.RootPath))
+        {
+            await projects.SaveAsync(interrupted.RecoveryPath, state, source);
+            interrupted.Dispose();
+            var emptyWindow = new MainWindow(["--checks", "--en"], settings.RootPath);
+            emptyWindow.Show();
+            await emptyWindow.images.ClearCacheAsync(null);
+            Check(File.Exists(source.OriginalPath) && File.Exists(source.NormalizedPath), "another window's cache cleanup preserves open artwork");
+            emptyWindow.pendingRecovery = emptyWindow.recovery.ClaimPending(); emptyWindow.ShowNotice(true);
+            Check(emptyWindow.pendingRecovery?.Path == interrupted.RecoveryPath, "second window claims only interrupted recovery");
+            emptyWindow.NoticeLaterClick(emptyWindow, new RoutedEventArgs()); emptyWindow.Close();
+            Check(File.Exists(interrupted.RecoveryPath) && File.Exists(recovery.RecoveryPath), "Later and empty close preserve deferred and other live recovery");
+            pendingRecovery = recovery.ClaimPending();
+            Check(pendingRecovery?.Path == interrupted.RecoveryPath, "deferred recovery is offered to a later session");
+            pendingRecovery!.Resolve(); pendingRecovery = null;
+        }
         await images.ClearCacheAsync(source.Sha256); await projects.ClearCacheAsync();
         Check(File.Exists(source.OriginalPath) && File.Exists(project), "explicit cache cleanup preserves active original and portable project");
         completedPdf = largePdf; completedSnapshot = snapshot; completedPrinter = null; RefreshCompletion();
@@ -160,6 +232,18 @@ public partial class MainWindow
         LanguageBox.SelectedIndex = 1;
         Check(CompletionTitle.Text == Lang.T("ExportedTitle") && CompletionBody.Text.Contains("60 × 45"), "completed export re-localizes and retains exported geometry");
         Capture("export-complete-pl.png");
+        foreach (string language in new[] { "en", "pl" })
+        foreach (decimal margin in new[] { 0m, .25m })
+        foreach (bool guide in new[] { false, true })
+        {
+            LanguageBox.SelectedIndex = language == "pl" ? 1 : 0;
+            var saved = snapshot.State with { Paper = snapshot.State.Paper with { MarginInches = margin }, AssemblyGuide = guide };
+            completedSnapshot = snapshot with { State = saved, Layout = LayoutEngine.Calculate(saved.Size, saved.Paper) };
+            RefreshCompletion();
+            Check(CompletionBody.Text.Contains(Lang.T("ActualSize")) && (margin == 0 || CompletionBody.Text.Contains(Lang.T("TrimHint"))),
+                $"actual-size completion instruction {language} margin={margin} guide={guide}");
+            if (margin > 0 && !guide) Capture($"margin-complete-{language}.png");
+        }
         Completion.Visibility = Visibility.Collapsed;
         dirty = false;
         closing = true; recoveryTimer.Stop(); recoveryCancellation.Cancel();

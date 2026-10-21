@@ -12,6 +12,7 @@ internal sealed class CalibrationWindow : Window
 {
     private readonly PaperSpec paper;
     private readonly string profile;
+    private readonly bool grayscale;
     private readonly PdfExporter pdf;
     private readonly PrintService printer;
     private readonly ComboBox printerBox = new(), pathwayBox = new();
@@ -24,9 +25,9 @@ internal sealed class CalibrationWindow : Window
     private string capturedDriver = "", capturedFingerprint = "", capturedPrinter = "";
     public CalibrationRecord? Record { get; private set; }
 
-    public CalibrationWindow(PaperSpec paper, string profile, CalibrationRecord? prior, PdfExporter pdf, PrintService printer)
+    public CalibrationWindow(PaperSpec paper, string profile, CalibrationRecord? prior, PdfExporter pdf, PrintService printer, bool grayscale = false)
     {
-        this.paper = paper; this.profile = profile; this.pdf = pdf; this.printer = printer;
+        this.paper = paper; this.profile = profile; this.pdf = pdf; this.printer = printer; this.grayscale = grayscale;
         Style = (Style)Application.Current.Resources[typeof(Window)];
         Title = Lang.T("CalibrationTitle"); Width = 630; Height = 860; MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; Background = new SolidColorBrush(Color.FromRgb(248, 250, 246));
@@ -79,7 +80,7 @@ internal sealed class CalibrationWindow : Window
     }
     private async void PrintClick(object sender, RoutedEventArgs e) => await RunAsync(async token =>
     {
-        var result = await printer.PrintCalibrationAsync(paper, this, Lang.Language, printerBox.Text, cancellationToken: token);
+        var result = await printer.PrintCalibrationAsync(paper, this, Lang.Language, printerBox.Text, cancellationToken: token, profile: profile, grayscale: grayscale);
         if (result.Submitted) { capturedPrinter = result.PrinterName; capturedDriver = result.Driver; capturedFingerprint = result.DriverFingerprint; printerBox.Text = result.PrinterName; error.Text = Lang.T("SentTitle"); }
     });
     private async Task RunAsync(Func<CancellationToken, Task> action)

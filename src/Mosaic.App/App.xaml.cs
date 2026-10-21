@@ -30,7 +30,7 @@ public partial class App : Application
         {
             string output = Path.GetFullPath(e.Args[verifyIndex + 1]);
             Directory.CreateDirectory(output);
-            var verificationWindow = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state"));
+            var verificationWindow = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state-" + Guid.NewGuid().ToString("N")));
             MainWindow = verificationWindow;
             verificationWindow.ContentRendered += async (_, _) =>
             {
