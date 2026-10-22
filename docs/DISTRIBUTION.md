@@ -1,5 +1,7 @@
 # Windows distribution
 
+**Production v1.0.0 publication is blocked by required external acceptance.** The [current release report](RELEASE_READINESS.md) identifies the latest verified candidate and outstanding gates; package records below are dated evidence.
+
 The release is a self-contained Windows x64 .NET 10 folder wrapped by a per-user Inno Setup 7.1 installer. It requires Windows 10 build 19041 or later and installs under `%LocalAppData%\Programs\Mosaic Template Studio`. End users do not install .NET, Python, CUDA or model packages. NVIDIA acceleration uses the existing Vulkan-capable graphics driver; Standard remains usable if enhancement is unavailable.
 
 The English/Polish installer provides a Start-menu shortcut, a checked-by-default desktop shortcut, optional `.mosaic` Open With association, and normal Windows uninstall. It requests no administrator rights. Reinstall uses a stable application ID. The uninstaller removes installed application files and its association/shortcuts; it has no deletion directives for personal projects, settings or recovery.
@@ -51,6 +53,8 @@ The compiler was installed into `.tools/inno/compiler` in per-user mode without 
 Installer compilation, payload checks and an install/uninstall smoke test on the development host establish only those observed results. A separate clean Windows machine with networking disabled is required to establish the clean-offline acceptance criterion; the development host already has graphics drivers and tools. Likewise a software print preparation check cannot prove Epson seam registration or Canon printable-area behavior.
 
 `scripts/Verify-Installer.ps1` installs into a new workspace test directory, checks every installed file against the publication hash manifest, verifies desktop/Start shortcuts and project association, then launches the installed executable with `--verify-install` and isolated workspace test data. That entry exercises the real installed runtime journey and produces `runtime-check/installed-runtime.json`; exit 0 and `passed: true` are required. The script then runs the normal uninstaller and confirms an unknown personal-project sentinel survives. It refuses to overwrite an already registered app installation. `-Language polish` exercises the Polish installer resources. These checks do not simulate a clean offline Windows machine or establish physical printer behavior.
+
+Failed payload/runtime checks also run the normal uninstaller in `finally` and retain `failure.txt` in the test directory. `-ManifestPath` selects the exact publication manifest for a candidate instead of the default current-build manifest.
 
 The release package is unsigned unless `release-package.json` reports a valid signature. No signing certificate was supplied. Signing/reputation review is a distribution consideration and cannot be manufactured by a local build. Windows may display an unknown-publisher reputation prompt for an unsigned installer.
 

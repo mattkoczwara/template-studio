@@ -258,6 +258,7 @@ public partial class MainWindow
         completedSnapshot = snapshot;
         count += await CheckRefinedEditorAsync(directory);
         count += await CheckFinalPolishAsync(directory, project);
+        count += await RunReleaseAppChecksAsync(Path.Combine(directory, "release-app"));
         count += await RunLifecycleChecksAsync(Path.Combine(directory, "lifecycle"));
         count += await ComparisonChecks.RunAsync(this, Path.Combine(directory, "comparison"));
         string previousLanguage = Lang.Language;

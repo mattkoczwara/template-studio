@@ -25,6 +25,8 @@ jobs:
         run: dotnet run --project tests/Mosaic.Core.Checks/Mosaic.Core.Checks.csproj -c Release -r win-x64
       - name: Check portable storage and recovery
         run: dotnet run --project tests/Mosaic.Storage.Checks/Mosaic.Storage.Checks.csproj -c Release -r win-x64
+      - name: Check PDF dimensions and Windows print preparation
+        run: dotnet run --project tests/Mosaic.Output.Smoke/Mosaic.Output.Smoke.csproj -c Release -r win-x64 -p:RestoreLockedMode=true
       - name: Build Windows editor
         run: dotnet build src/Mosaic.App/Mosaic.App.csproj -c Release -r win-x64 -p:RestoreLockedMode=true
 

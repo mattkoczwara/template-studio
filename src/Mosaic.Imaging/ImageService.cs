@@ -142,6 +142,10 @@ public sealed class ImageService
     /// <summary>Creates a coherent, rotated lossless image; placement and physical dimensions remain in LayoutEngine.</summary>
     public Task<string> GetOutputImageAsync(SourceInfo source, int rotation = 0, string? enhancedPath = null, CancellationToken ct = default) => RunAsync(() =>
     {
+        // Standard and Enhanced must share the same immutable, verified source.
+        // Check before cache reuse as well as before generating a fresh rotation.
+        if (!IsVerifiedImage(source.NormalizedPath, source.Width, source.Height))
+            throw new ImagePipelineException("imageReadFailed");
         var input = enhancedPath ?? source.NormalizedPath;
         if (enhancedPath != null && !IsVerifiedImage(enhancedPath)) throw new ImagePipelineException("imageReadFailed");
         if (rotation % 360 == 0 && enhancedPath != null) return input;
@@ -254,6 +258,13 @@ public sealed class ImageService
             using var lease = await _budget.AcquireAsync(ct).ConfigureAwait(false);
             return await Task.Run(action, ct).ConfigureAwait(false);
         }
+        catch (Exception ex) when (ct.IsCancellationRequested && ex is MagickException or ObjectDisposedException)
+        {
+            // Aborting native processing can invalidate the Magick image before
+            // managed code resumes. Preserve cancellation instead of reporting
+            // a decode/output error from the next image access.
+            throw new OperationCanceledException(null, ex, ct);
+        }
         finally { _gate.Release(); }
     }
 
@@ -302,6 +313,7 @@ public sealed class ImageService
 
     internal static void WriteAtomic(IMagickImage<byte> image, string destination, CancellationToken ct, CacheBudget budget)
     {
+        ct.ThrowIfCancellationRequested();
         budget.EnsureCapacity(CacheBudget.PngWriteReserve(image.Width, image.Height));
         var temp = Path.Combine(Path.GetDirectoryName(destination)!, Guid.NewGuid().ToString("N") + ".tmp");
         try

@@ -3,7 +3,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $checked = 0
-$files = @((Join-Path $root 'README.md'), (Join-Path $root 'CONTRIBUTING.md'), (Join-Path $root 'AGENTS.md'), (Join-Path $root 'THIRD-PARTY-NOTICES.md'))
+$files = @((Join-Path $root 'README.md'), (Join-Path $root 'CONTRIBUTING.md'), (Join-Path $root 'AGENTS.md'), (Join-Path $root 'THIRD-PARTY-NOTICES.md'), (Join-Path $root 'CHANGELOG.md'))
 $files += @(Get-ChildItem (Join-Path $root 'docs') -File -Filter '*.md' | ForEach-Object FullName)
 foreach ($file in $files) {
     $content = Get-Content -LiteralPath $file -Raw

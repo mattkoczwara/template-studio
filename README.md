@@ -13,6 +13,8 @@
 
 Open an illustration, enter its finished size in inches, and turn it into Letter-size sheets you can join into a paper reference for handmade mosaics. Mosaic preserves the original colors and proportions, with optional local AI enlargement when you want to compare a sharper interpretation.
 
+**v1.0.0 status: release candidate; production publication is blocked pending physical printer, clean offline-machine and artist acceptance.** See the [current release report](docs/RELEASE_READINESS.md) and [changelog](CHANGELOG.md) for verified software results and remaining gates.
+
 ![English editor showing a 24 × 18-inch floral template across six Letter sheets, with Print and Export PDF equally accessible](docs/assets/editor-en.png)
 
 <p align="center"><sub>Actual WPF editor rendered by the acceptance harness, using a source-generated floral illustration. Grid labels belong to the preview, not the borderless artwork.</sub></p>
@@ -39,7 +41,7 @@ Everyday 24-inch templates and occasional 60-inch projects use the same layout m
 ```powershell
 git clone https://github.com/mattkoczwara/template-studio.git
 cd template-studio
-dotnet run --project src/Mosaic.App/Mosaic.App.csproj -c Release
+dotnet run --project src/Mosaic.App/Mosaic.App.csproj -c Release -r win-x64 -p:RestoreLockedMode=true
 ```
 
 Install **.NET SDK 10.0.402** first (see [global.json](global.json)). The first restore needs Internet access; the installed application's core workflow runs offline. To build the installer, also install **Inno Setup 7.1.0**, then run:
@@ -96,7 +98,7 @@ Physical Epson/Canon ruler and seam measurements, clean offline-machine installa
 For a focused local check:
 
 ```powershell
-dotnet run --project tests/Mosaic.Core.Checks/Mosaic.Core.Checks.csproj -c Release
+dotnet run --project tests/Mosaic.Core.Checks/Mosaic.Core.Checks.csproj -c Release -r win-x64 -p:RestoreLockedMode=true
 ```
 
 See [contributing](CONTRIBUTING.md) for complete check commands and evidence expectations.
