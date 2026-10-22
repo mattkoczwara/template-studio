@@ -24,6 +24,22 @@ Artifacts:
 
 The app project includes `vendor/ai/**` under `ai/**`, `vendor/licenses/**` under `licenses/**`, and root third-party notices. See [AI.md](AI.md) for worker/model provenance and [PRINTING.md](PRINTING.md) for the physical validation boundary. The build requires both GPU and CPU workers, all four application-local Microsoft runtime DLLs, model weights/parameters and license records; it verifies every file declared by `ai/assets.json` before creating the installer.
 
+## Developer desktop launcher
+
+From a source checkout with the SDK pinned in [global.json](../global.json), run once:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-DevelopmentShortcut.ps1
+```
+
+This creates **Mosaic Studio — Latest Build** on the current user's Windows Desktop, with the application icon and checkout working directory. [Install-DevelopmentShortcut.ps1](../scripts/Install-DevelopmentShortcut.ps1) is safe to rerun after moving the checkout; it updates only that developer shortcut. The installer and its shortcuts are separate.
+
+Each click runs [Launch-Development.ps1](../scripts/Launch-Development.ps1), preferring `.tools/dotnet/dotnet.exe` and otherwise the SDK on PATH. It uses the existing MSBuild incremental **Release / win-x64** pipeline and locked package restore, without cleaning, packaging or running the full test suites. The first restore may need Internet access. Outputs and SDK restore caches stay in the ignored `artifacts/development/` and `.tools/` folders. MSBuild supplies the actual target path; an old executable is never used if building fails.
+
+Build helpers stay hidden; the editor opens normally from the checkout working directory. A launch error shows the reason, next steps and `artifacts/development/launcher.log`; early startup output is in `startup.stdout.log` / `startup.stderr.log` beside it. If the same development build is already open, save and close it before clicking again. The launcher never terminates an editor or clears projects, settings, calibration, recovery or caches; the app keeps its normal `%LocalAppData%/MosaicTemplateStudio` data. An editor running from another build can remain open.
+
+For terminal use: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Launch-Development.ps1`. Optional `-DotnetPath` selects an SDK executable; `-NoDialogs` reports failures to stderr/log with a nonzero exit code for automated checks. [Check-DevelopmentLauncher.ps1](../scripts/Check-DevelopmentLauncher.ps1) verifies fresh builds, incremental source changes and failure protection using a disposable WPF fixture, including a checkout path containing spaces.
+
 ## Compiler provenance
 
 Inno Setup 7.1.0 x64 was acquired from the [upstream release](https://github.com/jrsoftware/issrc/releases/tag/is-7_1_0), linked by the [official download page](https://jrsoftware.org/isdl.php). The downloaded `innosetup-7.1.0-x64.exe` SHA-256 is `0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f`. Its Authenticode signature verified as valid, publisher Pyrsys B.V., certificate thumbprint `E0AB19C8D38CBF9C44709925122A7A02F8C70CB7`.
@@ -38,7 +54,7 @@ Installer compilation, payload checks and an install/uninstall smoke test on the
 
 The release package is unsigned unless `release-package.json` reports a valid signature. No signing certificate was supplied. Signing/reputation review is a distribution consideration and cannot be manufactured by a local build. Windows may display an unknown-publisher reputation prompt for an unsigned installer.
 
-## Measured final package
+## Earlier package before editor and enhancement updates
 
 The final 1.0.0 installer is **63,337,792 bytes** (about 60.4 MiB), SHA-256 `d0032f09ed2ad86b08f9a6c0bdffe2e3cb561948e3f2d14a05b93efb55a5608a`. Its self-contained payload contains **456 files totaling 204,121,067 bytes**. Exact records are `artifacts/verification/release-package.json`, `published-files.json` and `final-summary.json`; the complete installer remains at `artifacts/installer/MosaicTemplateStudio-1.0.0-win-x64-Setup.exe` with its adjacent `.sha256` file.
 
@@ -46,3 +62,13 @@ The same final hash passed both English and Polish per-user installation/runtime
 
 These actual installed-host journeys do not establish clean-machine offline behavior, signing reputation, physical printer measurements, fluent Polish review or independent artist usability. See [ACCEPTANCE.md](ACCEPTANCE.md) for the complete requirement map and remaining external acceptance gates.
 
+
+## Current consolidated package — October 22, 2026
+
+The final source build includes the selected mild-denoise CUNet weights, rebuilt pinned CPU worker, current editor/lifecycle changes and synchronized output inspector. The unsigned self-contained installer is **65,924,711 bytes**, SHA-256 `0af5c12ad6a16fc7f7232d5f04b698217895d6bed0357be8e712f448aaf87ccf`. Its **459 payload files** total **207,120,813 bytes**. It was built with `scripts/Build-Release.ps1 -SkipTests` after focused tests; the script verifies all model/runtime/license payload hashes and now uses consistent `win-x64` locked restores for release checks.
+
+The final English install/runtime/uninstall cycle passed on this development host: every payload hash matched; Desktop/Start shortcuts and the project association pointed to the installed executable; **439 integrated editor checks** passed on bundled runtime 10.0.13, including EN/PL comparison, current-recipe persistence/migration and lifecycle tests. Normal uninstall preserved the unknown personal-project sentinel and removed only its registered application files/shortcuts/association. Evidence: `artifacts/installer-checks/e3654804f1484771a56d470b3a9784c8/result.json` and its `runtime-check/installed-runtime.json`. Earlier Polish installer resources were unchanged and were not retested for this package.
+
+The first cycle exposed a native image-writer failure in the deeply nested test cache; its modal error prevented unattended completion. The correction uses managed image streams plus extended paths for native worker file arguments, and verification reports unexpected editor errors immediately. The same final installed journey then passed. A focused check additionally processed a **352-character cache path with spaces** through import, Standard, actual Vulkan/CPU inference, rotated detail inspection and PDF export (`artifacts/ai-smoke/long-path-result.json`). The failed test installation was cleaned up safely and its personal sentinel was preserved.
+
+For daily source use, see [desktop launcher setup and troubleshooting](DEVELOPMENT.md). The launcher is separate from this installer, and neither setup path clears normal application data. Actual Windows scaling, independent artist/fluent Polish review, physical printer accuracy, signing and a separate clean offline machine remain the acceptance limits described above.

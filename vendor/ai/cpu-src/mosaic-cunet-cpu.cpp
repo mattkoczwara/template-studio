@@ -11,9 +11,12 @@
 
 int wmain(int argc, wchar_t** argv)
 {
-    if (argc != 8) return 2;
+    if (argc != 8 && argc != 9) return 2;
     const int width = _wtoi(argv[4]), height = _wtoi(argv[5]);
     const int tile = _wtoi(argv[6]), threads = _wtoi(argv[7]);
+    // Only the two shipped, integrity-checked CUNet recipes are accepted.
+    const int noise = argc == 9 ? _wtoi(argv[8]) : -1;
+    if (noise != -1 && noise != 1) return 2;
     if (width < 1 || height < 1 || width > 15000 || height > 15000 ||
         static_cast<long long>(width) * height > 16000000 || tile < 32 || tile > 256 || threads < 1 || threads > 8) return 2;
     FILE* input = nullptr;
@@ -32,10 +35,11 @@ int wmain(int argc, wchar_t** argv)
     net.opt.num_threads = threads;
     const auto folder = std::filesystem::path(argv[3]);
     FILE* param = nullptr; FILE* weights = nullptr;
-    if (_wfopen_s(&param, (folder / L"scale2.0x_model.param").c_str(), L"rb") != 0) return 4;
+    const wchar_t* model = noise == 1 ? L"noise1_scale2.0x_model" : L"scale2.0x_model";
+    if (_wfopen_s(&param, (folder / (std::wstring(model) + L".param")).c_str(), L"rb") != 0) return 4;
     int result = net.load_param(param); fclose(param);
     if (result != 0) return 4;
-    if (_wfopen_s(&weights, (folder / L"scale2.0x_model.bin").c_str(), L"rb") != 0) return 4;
+    if (_wfopen_s(&weights, (folder / (std::wstring(model) + L".bin")).c_str(), L"rb") != 0) return 4;
     result = net.load_model(weights); fclose(weights);
     if (result != 0) return 4;
 

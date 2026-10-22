@@ -25,6 +25,7 @@ public sealed record SourceInfo(string OriginalPath, string NormalizedPath, stri
     string Format, long ByteLength, string PreviewPath);
 public sealed record ProjectState
 {
+    public const string CurrentEnhancementModel = "waifu2x-cunet-20250915-noise1-bounded4x-v2";
     public int SchemaVersion { get; init; } = 1;
     public string Title { get; init; } = "Untitled";
     public ArtworkSize Size { get; init; } = new(24m, 18m);
@@ -33,7 +34,7 @@ public sealed record ProjectState
     public Composition Composition { get; init; } = new();
     public PaperSpec Paper { get; init; } = new();
     public QualityMode Quality { get; init; }
-    public string EnhancementModel { get; init; } = "waifu2x-cunet-20250915-scale2x-no-denoise";
+    public string EnhancementModel { get; init; } = CurrentEnhancementModel;
     public string PrinterProfile { get; init; } = "epson-et8500";
     public string? PrinterName { get; init; }
     public bool Grayscale { get; init; }

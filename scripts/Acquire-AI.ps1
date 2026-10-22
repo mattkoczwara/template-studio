@@ -16,7 +16,7 @@ $bundle = Join-Path $expanded 'waifu2x-ncnn-vulkan-20250915-windows'
 Copy-Item -LiteralPath (Join-Path $bundle 'waifu2x-ncnn-vulkan.exe') -Destination $assets
 Copy-Item -LiteralPath (Join-Path $bundle 'vcomp140.dll') -Destination $assets
 New-Item -ItemType Directory -Force (Join-Path $assets 'models-cunet') | Out-Null
-foreach ($file in @('scale2.0x_model.bin','scale2.0x_model.param')) { Copy-Item -LiteralPath (Join-Path $bundle "models-cunet\$file") -Destination (Join-Path $assets 'models-cunet') }
+foreach ($file in @('scale2.0x_model.bin','scale2.0x_model.param','noise1_scale2.0x_model.bin','noise1_scale2.0x_model.param')) { Copy-Item -LiteralPath (Join-Path $bundle "models-cunet\$file") -Destination (Join-Path $assets 'models-cunet') }
 # CPU worker and signed application-local runtimes are versioned in vendor/ai; normal release builds need no compiler.
 if ($RebuildCpu) {
     Get-PinnedArchive 'https://github.com/Tencent/ncnn/releases/download/20261020/ncnn-20261020-windows-vs2022.zip' (Join-Path $tools 'ncnn.zip') 'ef9fe4463e5db0f41484ad25e91686e709b91e400858639aed631c280dfa91d4'
@@ -35,5 +35,6 @@ if ($RebuildCpu) {
 $manifest = Get-ChildItem -LiteralPath $assets -Recurse -File | Where-Object { $_.Name -ne 'assets.json' } | ForEach-Object {
     [ordered]@{path=$_.FullName.Substring($assets.Length+1).Replace('\','/');bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
 }
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $assets 'assets.json') -Encoding UTF8
+$manifestJson = ($manifest | ConvertTo-Json -Depth 5).Replace("`r`n", "`n") + "`n"
+[IO.File]::WriteAllText((Join-Path $assets 'assets.json'), $manifestJson, [Text.UTF8Encoding]::new($false))
 Write-Output "Pinned offline AI assets ready: $assets"

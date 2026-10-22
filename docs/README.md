@@ -6,8 +6,11 @@ Start with the [project overview and first-template guide](../README.md).
 |---|---|
 | Print, calibrate or understand seams | [Printing](PRINTING.md) |
 | Understand Standard and AI enlargement | [Image processing and AI](AI.md) |
+| Inspect measured enhancement quality | [Model evaluation and matched crops](ENHANCEMENT_EVALUATION.md) |
 | Understand portable projects and recovery | [Storage](STORAGE.md) |
+| Review the Remove Image/shutdown correction | [Lifecycle regression evidence](LIFECYCLE_REGRESSION.md) |
 | Build, install or verify a package | [Windows distribution](DISTRIBUTION.md) |
+| Launch the latest development sources | [Desktop launcher setup and troubleshooting](DEVELOPMENT.md) |
 | Understand how the code fits together | [Implemented architecture](IMPLEMENTATION.md) |
 | Check implementation and remaining validation | [Acceptance map](ACCEPTANCE.md) |
 | Check the independent review and fixes | [Review resolution](CODE_REVIEW_RESOLUTION.md) |
@@ -18,4 +21,4 @@ The [product definition](POSTER_STUDIO_PRODUCT_DEFINITION.md) is binding. The [a
 
 ## Presentation assets
 
-`assets/editor-en.png` and `assets/editor-pl.png` are actual WPF renders from the integrated acceptance harness with a source-generated floral fixture. They are software renders, not photographs or proof of Windows display-scaling behavior. `assets/banner.svg` is original vector artwork using the application's icon palette. No downloaded artist artwork is used in the repository presentation.
+`assets/editor-en.png` and `assets/editor-pl.png` are actual WPF renders from the integrated acceptance harness with a source-generated floral fixture. They are software renders, not photographs or proof of Windows display-scaling behavior. `assets/banner.svg` is original vector artwork using the application's icon palette. The enhancement evidence includes a credited CC0 Met woodblock reference; its provenance and image hash are in [the evaluation report](ENHANCEMENT_EVALUATION.md).

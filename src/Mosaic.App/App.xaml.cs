@@ -20,7 +20,8 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
         {
-            LocalLog.Write("ui_failure", args.Exception.GetType().Name);
+            if (args.Handled) return;
+            LocalLog.Failure("ui_failure", args.Exception);
             MessageBox.Show(Lang.T("Unexpected"), Lang.T("AppName"), MessageBoxButton.OK, MessageBoxImage.Warning);
             args.Handled = true;
         };
@@ -31,6 +32,7 @@ public partial class App : Application
             string output = Path.GetFullPath(e.Args[verifyIndex + 1]);
             Directory.CreateDirectory(output);
             var verificationWindow = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state-" + Guid.NewGuid().ToString("N")));
+            verificationWindow.ErrorPresenter = message => throw new InvalidOperationException(message);
             MainWindow = verificationWindow;
             verificationWindow.ContentRendered += async (_, _) =>
             {
@@ -42,7 +44,7 @@ public partial class App : Application
                     exitCode = 0;
                 }
                 catch (Exception ex) { File.WriteAllText(Path.Combine(output, "failure.txt"), ex.ToString()); }
-                finally { verificationWindow.FinishChecks(); Shutdown(exitCode); }
+                finally { await verificationWindow.FinishChecksAsync(); Shutdown(exitCode); }
             };
             verificationWindow.Show();
             return;
@@ -55,6 +57,22 @@ public partial class App : Application
 
 internal static class LocalLog
 {
+    // Keep the operation, exception chain and stack, without arbitrary I/O messages
+    // that can contain a user's artwork filenames or output paths.
+    public static void Failure(string stage, Exception error)
+    {
+        var details = new System.Text.StringBuilder();
+        for (Exception? current = error; current != null; current = current.InnerException)
+        {
+            details.AppendLine($"{current.GetType().FullName} HResult=0x{current.HResult:X8}");
+            if (current is ObjectDisposedException disposed) details.AppendLine("Object: " + disposed.ObjectName);
+            else if (current is InvalidOperationException) details.AppendLine(current.Message);
+            if (current is Mosaic.Storage.ProjectStorageException storage) details.AppendLine("Code: " + storage.Code);
+            details.AppendLine(current.StackTrace);
+        }
+        Write(stage, details.ToString());
+    }
+
     public static void Write(string stage, string kind = "")
     {
         try

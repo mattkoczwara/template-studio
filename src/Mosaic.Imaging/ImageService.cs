@@ -68,9 +68,11 @@ public sealed class ImageService
         {
             using var image = new MagickImage();
             image.Progress += (_, e) => e.Cancel = ct.IsCancellationRequested;
-            image.Ping(original, new MagickReadSettings { Format = format, FrameCount = 1 });
+            using var originalStream = File.OpenRead(original);
+            image.Ping(originalStream, new MagickReadSettings { Format = format, FrameCount = 1 });
             ValidateDimensions(image.Width, image.Height);
-            image.Read(original, new MagickReadSettings { Format = format, FrameCount = 1 });
+            originalStream.Position = 0;
+            image.Read(originalStream, new MagickReadSettings { Format = format, FrameCount = 1 });
             ct.ThrowIfCancellationRequested();
             image.AutoOrient();
             Normalize(image);
@@ -96,7 +98,7 @@ public sealed class ImageService
     public Task<BitmapSource> GetPreviewAsync(string path, int rotation = 0, int maxEdge = 1800, CancellationToken ct = default) => RunAsync(() =>
     {
         if (maxEdge < 64 || maxEdge > 4096) throw new ArgumentOutOfRangeException(nameof(maxEdge));
-        using var image = new MagickImage(path);
+        using var image = ReadImage(path);
         image.Progress += (_, e) => e.Cancel = ct.IsCancellationRequested;
         Rotate(image, rotation);
         image.FilterType = FilterType.Lanczos;
@@ -112,6 +114,31 @@ public sealed class ImageService
         return (BitmapSource)bitmap;
     }, ct);
 
+    /// <summary>Loads a bounded detail from an output asset, without first reducing the whole image.
+    /// Coordinates are normalized so unequal Standard/AI pixel dimensions inspect the same artwork.</summary>
+    public Task<BitmapSource> GetInspectionRegionAsync(string path, System.Windows.Rect region, int maxEdge = 2048, CancellationToken ct = default) => RunAsync(() =>
+    {
+        if (maxEdge < 64 || maxEdge > 4096 || region.IsEmpty ||
+            !double.IsFinite(region.X + region.Y + region.Width + region.Height) ||
+            region.X < 0 || region.Y < 0 || region.Width <= 0 || region.Height <= 0 || region.Right > 1.000001 || region.Bottom > 1.000001)
+            throw new ArgumentOutOfRangeException(nameof(region));
+        if (!IsVerifiedImage(path)) throw new ImagePipelineException("imageReadFailed");
+        using var image = ReadImage(path);
+        image.Progress += (_, e) => e.Cancel = ct.IsCancellationRequested;
+        int x = Math.Clamp((int)Math.Round(region.X * image.Width), 0, (int)image.Width - 1);
+        int y = Math.Clamp((int)Math.Round(region.Y * image.Height), 0, (int)image.Height - 1);
+        int right = Math.Clamp((int)Math.Round(region.Right * image.Width), x + 1, (int)image.Width);
+        int bottom = Math.Clamp((int)Math.Round(region.Bottom * image.Height), y + 1, (int)image.Height);
+        image.Crop(new MagickGeometry(x, y, (uint)(right - x), (uint)(bottom - y))); image.ResetPage();
+        image.FilterType = FilterType.Lanczos;
+        image.Resize(new MagickGeometry((uint)maxEdge, (uint)maxEdge) { Greater = true });
+        ct.ThrowIfCancellationRequested();
+        using var stream = new MemoryStream(image.ToByteArray(MagickFormat.Png));
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze();
+        return (BitmapSource)bitmap;
+    }, ct);
+
     /// <summary>Creates a coherent, rotated lossless image; placement and physical dimensions remain in LayoutEngine.</summary>
     public Task<string> GetOutputImageAsync(SourceInfo source, int rotation = 0, string? enhancedPath = null, CancellationToken ct = default) => RunAsync(() =>
     {
@@ -119,9 +146,12 @@ public sealed class ImageService
         if (enhancedPath != null && !IsVerifiedImage(enhancedPath)) throw new ImagePipelineException("imageReadFailed");
         if (rotation % 360 == 0 && enhancedPath != null) return input;
         var name = enhancedPath == null ? "standard" : "enhanced";
-        var output = Path.Combine(Path.GetDirectoryName(source.NormalizedPath)!, $"{name}-r{((rotation % 360) + 360) % 360}-v1.png");
+        // Rotation variants belong to the processed pixels, not just the source.
+        // A changed recipe must never reuse another enhancement's rotated cache.
+        string identity = enhancedPath == null ? "v1" : File.ReadAllText(enhancedPath + ".sha256").Trim().ToLowerInvariant()[..32];
+        var output = Path.Combine(Path.GetDirectoryName(source.NormalizedPath)!, $"{name}-r{((rotation % 360) + 360) % 360}-{identity}.png");
         if (IsVerifiedImage(output)) return output;
-        using var image = new MagickImage(input);
+        using var image = ReadImage(input);
         image.Progress += (_, e) => e.Cancel = ct.IsCancellationRequested;
         Rotate(image, rotation);
         if (enhancedPath == null)
@@ -142,13 +172,14 @@ public sealed class ImageService
     public Task<string> CreateDetailComparisonAsync(SourceInfo source, string enhancedPath, CancellationToken ct = default) => RunAsync(() =>
     {
         string output = Path.Combine(Path.GetDirectoryName(source.NormalizedPath)!, "comparison.png");
-        using var original = new MagickImage(source.NormalizedPath);
-        using var enhanced = new MagickImage(enhancedPath);
+        using var original = ReadImage(source.NormalizedPath);
+        using var enhanced = ReadImage(enhancedPath);
         int size = (int)Math.Min(256, Math.Min(original.Width, original.Height));
         var crop = new MagickGeometry(((int)original.Width - size) / 2, ((int)original.Height - size) / 2, (uint)size, (uint)size);
         original.Crop(crop); original.ResetPage();
         original.FilterType = FilterType.Lanczos; original.Resize(512, 512);
-        enhanced.Crop(new MagickGeometry(crop.X * 2, crop.Y * 2, (uint)size * 2, (uint)size * 2)); enhanced.ResetPage();
+        double sx = (double)enhanced.Width / source.Width, sy = (double)enhanced.Height / source.Height;
+        enhanced.Crop(new MagickGeometry((int)Math.Round(crop.X * sx), (int)Math.Round(crop.Y * sy), (uint)Math.Round(size * sx), (uint)Math.Round(size * sy))); enhanced.ResetPage();
         enhanced.Resize(512, 512);
         using var collection = new MagickImageCollection { original.Clone(), enhanced.Clone() };
         using var joined = collection.AppendHorizontally();
@@ -254,7 +285,7 @@ public sealed class ImageService
     private static void AtomicCopy(string source, string destination, CancellationToken ct, CacheBudget budget)
     {
         budget.EnsureCapacity(new FileInfo(source).Length);
-        var temp = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var temp = Path.Combine(Path.GetDirectoryName(destination)!, Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             using (var input = File.OpenRead(source))
@@ -272,11 +303,14 @@ public sealed class ImageService
     internal static void WriteAtomic(IMagickImage<byte> image, string destination, CancellationToken ct, CacheBudget budget)
     {
         budget.EnsureCapacity(CacheBudget.PngWriteReserve(image.Width, image.Height));
-        var temp = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var temp = Path.Combine(Path.GetDirectoryName(destination)!, Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             ct.ThrowIfCancellationRequested();
-            image.Write(temp, MagickFormat.Png);
+            // Managed streams support deep Windows cache paths; the native
+            // filename writer can fail at MAX_PATH even in a long-path-aware app.
+            using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            { image.Write(output, MagickFormat.Png); output.Flush(true); }
             ct.ThrowIfCancellationRequested();
             File.Move(temp, destination, true);
             WriteChecksum(destination);
@@ -294,7 +328,8 @@ public sealed class ImageService
             if (expected.Length != 64) return false;
             using var input = File.OpenRead(path);
             if (!Convert.ToHexString(SHA256.HashData(input)).Equals(expected, StringComparison.OrdinalIgnoreCase)) return false;
-            var info = new MagickImageInfo(path);
+            input.Position = 0;
+            var info = new MagickImageInfo(input);
             return info.Width > 0 && info.Height > 0 && (width == null || info.Width == width) && (height == null || info.Height == height);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or MagickException) { return false; }
@@ -302,7 +337,7 @@ public sealed class ImageService
 
     internal static void WriteChecksum(string path)
     {
-        string temp = path + ".sha256." + Guid.NewGuid().ToString("N") + ".tmp";
+        string temp = Path.Combine(Path.GetDirectoryName(path)!, Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
             using var input = File.OpenRead(path);
@@ -310,5 +345,17 @@ public sealed class ImageService
             File.Move(temp, path + ".sha256", true);
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
+    }
+
+    internal static MagickImage ReadImage(string path)
+    {
+        using var input = File.OpenRead(path);
+        return new MagickImage(input);
+    }
+
+    internal static MagickImageInfo ReadInfo(string path)
+    {
+        using var input = File.OpenRead(path);
+        return new MagickImageInfo(input);
     }
 }

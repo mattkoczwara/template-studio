@@ -1,83 +1,196 @@
-<Window x:Class="Mosaic.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Mosaic.App" Title="Mosaic Template Studio" Style="{StaticResource {x:Type Window}}" Width="1380" Height="920" MinWidth="1050" MinHeight="700" WindowStartupLocation="CenterScreen" AllowDrop="True" Drop="FileDrop" DragOver="FileDragOver" Closing="WindowClosing">
+<Window x:Class="Mosaic.App.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:Mosaic.App"
+ Title="Mosaic Template Studio" Style="{StaticResource {x:Type Window}}"
+ Width="1380" Height="920" MinWidth="1050" MinHeight="700" WindowStartupLocation="CenterScreen"
+ AllowDrop="True" Drop="FileDrop" DragOver="FileDragOver" Closing="WindowClosing">
  <Grid Background="#F7F8F4">
-  <Grid.RowDefinitions><RowDefinition Height="86"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition Height="Auto" MinHeight="110"/></Grid.RowDefinitions>
+  <Grid.RowDefinitions>
+   <RowDefinition Height="86"/><RowDefinition Height="Auto"/><RowDefinition/>
+   <RowDefinition Height="Auto"/>
+  </Grid.RowDefinitions>
   <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="28,15">
    <DockPanel LastChildFill="False">
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
-     <Grid Width="38" Height="38" Margin="0,0,12,0"><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Border Background="#286B5C" CornerRadius="7,1,1,1" Margin="1"/><Border Grid.Column="1" Background="#B6CBB5" CornerRadius="1,7,1,1" Margin="1"/><Border Grid.Row="1" Background="#D3AF79" CornerRadius="1,1,1,7" Margin="1"/><Border Grid.Row="1" Grid.Column="1" Background="#6F9481" CornerRadius="1,1,7,1" Margin="1"/></Grid>
-     <StackPanel><TextBlock Text="Mosaic" FontFamily="Georgia" FontSize="27"/><TextBlock Text="TEMPLATE STUDIO" FontSize="10" Foreground="{StaticResource Muted}"/></StackPanel>
+     <Grid Width="38" Height="38" Margin="0,0,12,0">
+      <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <Border Background="#286B5C" CornerRadius="7,1,1,1" Margin="1"/>
+      <Border Grid.Column="1" Background="#B6CBB5" CornerRadius="1,7,1,1" Margin="1"/>
+      <Border Grid.Row="1" Background="#D3AF79" CornerRadius="1,1,1,7" Margin="1"/>
+      <Border Grid.Row="1" Grid.Column="1" Background="#6F9481" CornerRadius="1,1,7,1" Margin="1"/>
+     </Grid>
+     <StackPanel><TextBlock Text="Mosaic" FontFamily="Georgia" FontSize="27"/><TextBlock Text="TEMPLATE STUDIO" FontSize="11" Foreground="{StaticResource Muted}"/></StackPanel>
     </StackPanel>
     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-     <Button Content="{DynamicResource OpenImage}" Click="OpenImageClick" Margin="0,0,10,0"/>
+     <Button x:Name="OpenImageButton" Content="{DynamicResource OpenImage}" Click="OpenImageClick" Visibility="Collapsed" Margin="0,0,10,0"/>
      <Button x:Name="ProjectButton" Content="{DynamicResource Project}" Click="ProjectMenuClick" Margin="0,0,10,0"/>
-     <ComboBox x:Name="LanguageBox" Width="125" SelectionChanged="LanguageChanged" AutomationProperties.Name="Language / Język"><ComboBoxItem Content="English"/><ComboBoxItem Content="Polski"/></ComboBox>
+     <ComboBox x:Name="LanguageBox" Width="132" SelectionChanged="LanguageChanged" AutomationProperties.Name="Language / Język">
+      <ComboBoxItem Content="English"/><ComboBoxItem Content="Polski"/>
+     </ComboBox>
     </StackPanel>
    </DockPanel>
   </Border>
+  <!-- Recovery is the only top-level notice. Printer guidance lives beside output. -->
   <Border x:Name="NoticeBar" Grid.Row="1" Background="#EAF0E5" Padding="28,10" Visibility="Collapsed">
-   <DockPanel><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="NoticeAction" Click="NoticeActionClick" Padding="12,6" MinHeight="32" Margin="14,0,8,0"/><Button Content="{DynamicResource Later}" Click="NoticeLaterClick" Padding="12,6" MinHeight="32"/></StackPanel><TextBlock x:Name="NoticeText" VerticalAlignment="Center"/></DockPanel>
+   <DockPanel>
+    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="NoticeAction" Click="NoticeActionClick" Margin="14,0,8,0"/><Button Content="{DynamicResource Later}" Click="NoticeLaterClick"/></StackPanel>
+    <TextBlock x:Name="NoticeText" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
+   </DockPanel>
   </Border>
-  <Grid Grid.Row="2">
-   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="370"/></Grid.ColumnDefinitions>
-   <Grid Margin="22,16,22,0">
+  <Grid x:Name="Workspace" Grid.Row="2">
+   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition x:Name="EditorColumn" Width="0"/></Grid.ColumnDefinitions>
+   <Grid Margin="22,18,22,0">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <StackPanel x:Name="PreviewHeader" Visibility="Collapsed" Margin="12,0,12,0"><DockPanel><TextBlock x:Name="QualityBadge" DockPanel.Dock="Right" Foreground="{StaticResource Accent}" VerticalAlignment="Center" FontSize="14"/><TextBlock x:Name="ArtworkTitle" FontFamily="Georgia" FontSize="23" TextTrimming="CharacterEllipsis" MaxWidth="440" HorizontalAlignment="Left"/></DockPanel><WrapPanel Margin="0,10,0,0"><TextBlock Text="{DynamicResource Orientation}" FontSize="14" VerticalAlignment="Center" Margin="0,0,10,0"/><ComboBox x:Name="OrientationBox" Width="245" SelectionChanged="PaperChanged" AutomationProperties.Name="Paper orientation / Orientacja papieru"><ComboBoxItem Content="{DynamicResource Auto}"/><ComboBoxItem Content="{DynamicResource Portrait}"/><ComboBoxItem Content="{DynamicResource Landscape}"/></ComboBox></WrapPanel></StackPanel>
-    <local:PreviewSurface x:Name="Preview" Grid.Row="1" AutomationProperties.Name="Artwork preview / Podgląd obrazu"/>
-    <StackPanel x:Name="Welcome" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="580" Margin="28">
-     <Border Width="88" Height="88" Background="#E6EDE1" CornerRadius="25" HorizontalAlignment="Center" Margin="0,0,0,28"><Path Data="M 25,17 L 25,51 M 17,25 L 51,25 M 43,17 L 43,51 M 17,43 L 51,43" Stroke="#75977A" StrokeThickness="2" Width="68" Height="68" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-     <TextBlock Text="{DynamicResource WelcomeTitle}" FontFamily="Georgia" FontSize="34" TextAlignment="Center" LineHeight="43" Margin="0,0,0,16"/>
-     <TextBlock Text="{DynamicResource WelcomeBody}" Foreground="{StaticResource Muted}" TextAlignment="Center" FontSize="17" LineHeight="27" Margin="0,0,0,28"/>
-     <Button Content="{DynamicResource OpenImage}" Style="{StaticResource Primary}" Click="OpenImageClick" HorizontalAlignment="Center" MinWidth="190"/>
-     <TextBlock Text="{DynamicResource DropHint}" TextAlignment="Center" FontSize="14" Foreground="{StaticResource Muted}" Margin="0,16,0,0"/>
-     <TextBlock Text="{DynamicResource Private}" TextAlignment="Center" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,50,0,0"/>
-     <StackPanel x:Name="WelcomeRecent" Margin="20,24,20,0"/>
-    </StackPanel>
-    <StackPanel x:Name="PreviewTools" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,17" HorizontalAlignment="Center">
-     <WrapPanel HorizontalAlignment="Center"><Button Content="{DynamicResource FitView}" Click="FitViewClick" Margin="0,0,8,0" Padding="12,7"/><Button Content="{DynamicResource Detail}" Click="DetailClick" Margin="0,0,8,0" Padding="12,7"/><CheckBox x:Name="GridCheck" Content="{DynamicResource Grid}" IsChecked="True" Checked="GridChanged" Unchecked="GridChanged" VerticalAlignment="Center"/></WrapPanel>
-     <TextBlock x:Name="GridSummary" TextAlignment="Center" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,12,0,0"/>
+    <Grid x:Name="PreviewHeader" Visibility="Collapsed" Margin="12,0,12,8">
+     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+      <TextBlock x:Name="ArtworkTitle" FontFamily="Georgia" FontSize="23" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+      <WrapPanel Margin="0,5,0,0"><TextBlock x:Name="SourceDetails" Foreground="{StaticResource Muted}" FontSize="15" Margin="0,0,12,0"/><TextBlock x:Name="QualityBadge" Foreground="{StaticResource Accent}" FontSize="15"/></WrapPanel>
+     </StackPanel>
+     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+      <Button x:Name="RotateButton" Content="{DynamicResource Rotate}" Click="RotateClick" Padding="12,8" Margin="0,0,8,0"/>
+      <Button x:Name="RemoveImageButton" Content="{DynamicResource RemoveImage}" Click="RemoveImageClick" Padding="12,8" Background="Transparent" BorderBrush="{StaticResource Line}" AutomationProperties.Name="{DynamicResource RemoveImage}"/>
+     </StackPanel>
+    </Grid>
+    <local:PreviewSurface x:Name="Preview" Grid.Row="1" AutomationProperties.Name="{DynamicResource PreviewName}" FocusVisualStyle="{StaticResource FocusCue}"/>
+    <ScrollViewer x:Name="WelcomeScroll" Grid.Row="1" VerticalContentAlignment="Center" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+     <StackPanel x:Name="Welcome" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="600" Margin="28,22">
+      <TextBlock Text="{DynamicResource WelcomeTitle}" FontFamily="Georgia" FontSize="34" TextAlignment="Center" LineHeight="43" Margin="0,0,0,16"/>
+      <TextBlock Text="{DynamicResource WelcomeBody}" Foreground="{StaticResource Muted}" TextAlignment="Center" FontSize="17" LineHeight="27" Margin="0,0,0,26"/>
+      <Button x:Name="WelcomeOpenButton" Content="{DynamicResource OpenImage}" Style="{StaticResource Primary}" Click="OpenImageClick" HorizontalAlignment="Center" MinWidth="200"/>
+      <TextBlock Text="{DynamicResource DropHint}" TextAlignment="Center" FontSize="15" Foreground="{StaticResource Muted}" Margin="0,16,0,0"/>
+      <TextBlock Text="{DynamicResource WelcomeCraft}" TextAlignment="Center" FontSize="15" Foreground="{StaticResource Muted}" Margin="0,32,0,0"/>
+      <StackPanel x:Name="WelcomeRecent" Margin="20,24,20,0"/>
+     </StackPanel>
+    </ScrollViewer>
+    <StackPanel x:Name="PreviewTools" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,18" HorizontalAlignment="Center">
+     <WrapPanel HorizontalAlignment="Center">
+      <Button Content="{DynamicResource FitView}" Click="FitViewClick" Margin="0,0,8,0" Padding="12,8"/>
+      <Button Content="{DynamicResource Detail}" Click="DetailClick" Margin="0,0,8,0" Padding="12,8"/>
+      <CheckBox x:Name="GridCheck" Content="{DynamicResource Grid}" IsChecked="True" Checked="GridChanged" Unchecked="GridChanged" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource Grid}"/>
+     </WrapPanel>
+     <TextBlock x:Name="GridSummary" TextAlignment="Center" FontSize="15" Foreground="{StaticResource Muted}" Margin="0,10,0,0"/>
     </StackPanel>
    </Grid>
-   <Border Grid.Column="1" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="EditorRail" Margin="25,25,25,26">
-     <TextBlock Text="{DynamicResource ImageSection}" Style="{StaticResource Section}"/>
-     <TextBlock x:Name="SourceDetails" Text="—" Foreground="{StaticResource Muted}" FontSize="14" Margin="0,0,0,10"/>
-     <Button x:Name="RotateButton" Content="{DynamicResource Rotate}" Click="RotateClick" HorizontalAlignment="Left" Padding="12,6" MinHeight="36"/>
-     <Border Height="1" Background="{StaticResource Line}" Margin="0,21,0,22"/>
-     <TextBlock Text="{DynamicResource SizeSection}" Style="{StaticResource Section}"/>
-     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{DynamicResource Width}" Style="{StaticResource Label}"/><TextBox x:Name="WidthBox" Text="24" TextChanged="DimensionTextChanged" LostKeyboardFocus="DimensionsCommitted" KeyDown="DimensionKey" AutomationProperties.Name="Final width / Docelowa szerokość"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="{DynamicResource Height}" Style="{StaticResource Label}"/><TextBox x:Name="HeightBox" Text="18" TextChanged="DimensionTextChanged" LostKeyboardFocus="DimensionsCommitted" KeyDown="DimensionKey" AutomationProperties.Name="Final height / Docelowa wysokość"/></StackPanel></Grid>
-     <TextBlock x:Name="SizeError" Foreground="#A13F32" FontSize="13" Visibility="Collapsed" Margin="0,6,0,0"/>
-     <CheckBox x:Name="LockCheck" Content="{DynamicResource Lock}" IsChecked="True" Checked="LockChanged" Unchecked="LockChanged"/>
-     <TextBlock Text="{DynamicResource InchesHelp}" Foreground="{StaticResource Muted}" FontSize="13" LineHeight="20" Margin="0,0,0,6"/>
-     <StackPanel x:Name="CompositionPanel" Visibility="Collapsed" Margin="0,10,0,0"><TextBlock Text="{DynamicResource Composition}" Style="{StaticResource Label}"/><ComboBox x:Name="FitBox" SelectionChanged="CompositionChanged" AutomationProperties.Name="Image fit / Dopasowanie obrazu"><ComboBoxItem Content="{DynamicResource Fit}"/><ComboBoxItem Content="{DynamicResource Crop}"/><ComboBoxItem Content="{DynamicResource Stretch}"/></ComboBox><TextBlock x:Name="FitHelp" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,8,0,0"/><StackPanel x:Name="CropPanel" Visibility="Collapsed"><TextBlock Text="{DynamicResource CropX}" Style="{StaticResource Label}" Margin="0,12,0,4"/><Slider x:Name="CropX" Minimum="0" Maximum="1" Value="0.5" ValueChanged="CropChanged" AutomationProperties.Name="Crop horizontal position"/><TextBlock Text="{DynamicResource CropY}" Style="{StaticResource Label}" Margin="0,12,0,4"/><Slider x:Name="CropY" Minimum="0" Maximum="1" Value="0.5" ValueChanged="CropChanged" AutomationProperties.Name="Crop vertical position"/></StackPanel></StackPanel>
-     <Border Height="1" Background="{StaticResource Line}" Margin="0,20,0,22"/>
-     <TextBlock Text="{DynamicResource QualitySection}" Style="{StaticResource Section}"/>
-     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><RadioButton x:Name="StandardRadio" Content="{DynamicResource Standard}" GroupName="Quality" IsChecked="True" Checked="QualityChanged" Padding="5,8"/><RadioButton x:Name="EnhancedRadio" Grid.Column="1" Content="{DynamicResource Enhanced}" GroupName="Quality" Checked="QualityChanged" Padding="5,8"/></Grid>
-     <Button x:Name="EnhanceButton" Content="{DynamicResource Enhance}" Click="EnhanceClick" Margin="0,10,0,0"/>
-     <TextBlock Text="{DynamicResource AiHint}" Foreground="{StaticResource Muted}" FontSize="13" LineHeight="20" Margin="0,10,0,0"/>
-     <Button x:Name="CompareButton" Content="{DynamicResource Compare}" Click="CompareClick" Visibility="Collapsed" Margin="0,10,0,0"/>
-     <TextBlock x:Name="ResolutionHint" Foreground="#85612B" FontSize="13" Margin="0,8,0,0"/>
-     <Expander Header="{DynamicResource PaperSection}" IsExpanded="False"><StackPanel Margin="0,12,0,0">
-      <ComboBox x:Name="ProfileBox" SelectionChanged="ProfileChanged" AutomationProperties.Name="Printer profile / Profil drukarki"><ComboBoxItem Content="{DynamicResource Epson}"/><ComboBoxItem Content="{DynamicResource Canon}"/></ComboBox>
-      <TextBlock x:Name="CandidateSummary" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,7,0,0"/>
-      <TextBlock Text="{DynamicResource Margin}" Style="{StaticResource Label}" Margin="0,14,0,6"/><TextBox x:Name="MarginBox" Text="0" LostKeyboardFocus="MarginCommitted" KeyDown="MarginKey" AutomationProperties.Name="Paper margin / Margines papieru"/>
-      <TextBlock x:Name="PrintHint" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,8,0,0"/>
-      <CheckBox x:Name="GuideCheck" Content="{DynamicResource Guide}" Checked="OptionChanged" Unchecked="OptionChanged"/>
-      <CheckBox x:Name="GrayscaleCheck" Content="{DynamicResource Grayscale}" Checked="OptionChanged" Unchecked="OptionChanged"/>
-      <TextBlock Text="{DynamicResource Copies}" Style="{StaticResource Label}" Margin="0,10,0,6"/><ComboBox x:Name="CopiesBox" SelectionChanged="CopiesChanged" AutomationProperties.Name="Print copies / Liczba kopii"><ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/><ComboBoxItem Content="5"/></ComboBox>
-      <CheckBox x:Name="CpuCheck" Content="{DynamicResource Cpu}"/>
-      <Button Content="{DynamicResource Calibration}" Click="CalibrationClick" Margin="0,12,0,0"/>
-      <Button Content="{DynamicResource About}" Click="AboutClick" Margin="0,10,0,0"/>
-     </StackPanel></Expander>
-    </StackPanel></ScrollViewer>
+   <Border x:Name="EditorSidebar" Grid.Column="1" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0" Visibility="Collapsed">
+    <ScrollViewer x:Name="EditorScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+     <StackPanel x:Name="EditorRail" Margin="22,22,22,24">
+      <TextBlock Text="{DynamicResource SizeSection}" Style="{StaticResource Section}"/>
+      <Grid>
+       <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+       <StackPanel>
+        <TextBlock x:Name="WidthLabel" Text="{DynamicResource Width}" Style="{StaticResource Label}"/>
+        <TextBox x:Name="WidthBox" Text="24" TextChanged="DimensionTextChanged" LostKeyboardFocus="DimensionsCommitted" KeyDown="DimensionKey" AutomationProperties.Name="{DynamicResource WidthName}" AutomationProperties.LabeledBy="{Binding ElementName=WidthLabel}"/>
+       </StackPanel>
+       <StackPanel Grid.Column="2">
+        <TextBlock x:Name="HeightLabel" Text="{DynamicResource Height}" Style="{StaticResource Label}"/>
+        <TextBox x:Name="HeightBox" Text="18" TextChanged="DimensionTextChanged" LostKeyboardFocus="DimensionsCommitted" KeyDown="DimensionKey" AutomationProperties.Name="{DynamicResource HeightName}" AutomationProperties.LabeledBy="{Binding ElementName=HeightLabel}"/>
+       </StackPanel>
+      </Grid>
+      <CheckBox x:Name="LockCheck" Content="{DynamicResource Lock}" IsChecked="True" Checked="LockChanged" Unchecked="LockChanged" AutomationProperties.Name="{DynamicResource Lock}"/>
+      <TextBlock x:Name="SizeHelp" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="22"/>
+      <TextBlock x:Name="SizeError" Foreground="#97392D" FontSize="15" LineHeight="22" Visibility="Collapsed" Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite"/>
+      <StackPanel x:Name="CompositionPanel" Visibility="Collapsed" Margin="0,12,0,0">
+       <TextBlock Text="{DynamicResource Composition}" Style="{StaticResource Label}"/>
+       <ComboBox x:Name="FitBox" SelectionChanged="CompositionChanged" AutomationProperties.Name="{DynamicResource Composition}"><ComboBoxItem Content="{DynamicResource Fit}"/><ComboBoxItem Content="{DynamicResource Crop}"/><ComboBoxItem Content="{DynamicResource Stretch}"/></ComboBox>
+       <TextBlock x:Name="FitHelp" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="22" Margin="0,8,0,0"/>
+       <StackPanel x:Name="CropPanel" Visibility="Collapsed">
+        <TextBlock Text="{DynamicResource CropX}" Style="{StaticResource Label}" Margin="0,12,0,4"/><Slider x:Name="CropX" Minimum="0" Maximum="1" Value="0.5" ValueChanged="CropChanged" AutomationProperties.Name="{DynamicResource CropX}"/>
+        <TextBlock Text="{DynamicResource CropY}" Style="{StaticResource Label}" Margin="0,12,0,4"/><Slider x:Name="CropY" Minimum="0" Maximum="1" Value="0.5" ValueChanged="CropChanged" AutomationProperties.Name="{DynamicResource CropY}"/>
+       </StackPanel>
+      </StackPanel>
+      <Border Height="1" Background="{StaticResource Line}" Margin="0,14,0,14"/>
+      <TextBlock Text="{DynamicResource QualitySection}" Style="{StaticResource Section}"/>
+      <Grid x:Name="QualityChoices" AutomationProperties.HelpText="{DynamicResource AiHint}">
+       <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+       <RadioButton x:Name="StandardRadio" Content="{DynamicResource Standard}" GroupName="Quality" IsChecked="True" Checked="QualityChanged" AutomationProperties.Name="{DynamicResource Standard}"/>
+       <RadioButton x:Name="EnhancedRadio" Grid.Column="1" Content="{DynamicResource Enhanced}" GroupName="Quality" Checked="QualityChanged" AutomationProperties.Name="{DynamicResource Enhanced}"/>
+      </Grid>
+      <Button x:Name="CompareButton" Content="{DynamicResource Compare}" Click="CompareClick" Visibility="Collapsed" Margin="0,8,0,0"/>
+      <TextBlock Text="{DynamicResource AiHint}" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="22" Margin="0,10,0,0"/>
+      <TextBlock x:Name="ResolutionHint" Foreground="#795221" FontSize="15" LineHeight="22" Margin="0,8,0,0"/>
+      <Expander x:Name="EnhancementOptions" Header="{DynamicResource EnhancementOptions}" AutomationProperties.Name="{DynamicResource EnhancementOptions}">
+       <CheckBox x:Name="CpuCheck" Content="{DynamicResource Cpu}" Margin="0,8,0,0" AutomationProperties.Name="{DynamicResource Cpu}"/>
+      </Expander>
+      <Border Height="1" Background="{StaticResource Line}" Margin="0,14,0,14"/>
+      <TextBlock Text="{DynamicResource Orientation}" Style="{StaticResource Label}"/>
+      <ComboBox x:Name="OrientationBox" SelectionChanged="PaperChanged" AutomationProperties.Name="{DynamicResource Orientation}">
+       <ComboBoxItem Content="{DynamicResource Auto}"/><ComboBoxItem Content="{DynamicResource Portrait}"/><ComboBoxItem Content="{DynamicResource Landscape}"/>
+      </ComboBox>
+      <Expander x:Name="PaperOptions" Header="{DynamicResource PaperSection}" IsExpanded="False" AutomationProperties.Name="{DynamicResource PaperSection}">
+       <StackPanel Margin="0,12,0,0">
+        <TextBlock Text="{DynamicResource PrinterProfile}" Style="{StaticResource Label}"/>
+        <ComboBox x:Name="ProfileBox" SelectionChanged="ProfileChanged" AutomationProperties.Name="{DynamicResource PrinterProfile}"><ComboBoxItem Content="{DynamicResource Epson}"/><ComboBoxItem Content="{DynamicResource Canon}"/></ComboBox>
+        <TextBlock x:Name="CandidateSummary" FontSize="15" LineHeight="22" Foreground="{StaticResource Muted}" Margin="0,8,0,0"/>
+        <TextBlock Text="{DynamicResource Margin}" Style="{StaticResource Label}" Margin="0,14,0,6"/>
+        <TextBox x:Name="MarginBox" Text="0" LostKeyboardFocus="MarginCommitted" KeyDown="MarginKey" AutomationProperties.Name="{DynamicResource Margin}"/>
+        <TextBlock x:Name="PrintHint" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="22" Margin="0,8,0,0"/>
+        <CheckBox x:Name="GuideCheck" Checked="OptionChanged" Unchecked="OptionChanged" AutomationProperties.Name="{DynamicResource Guide}"><TextBlock Text="{DynamicResource Guide}"/></CheckBox>
+        <CheckBox x:Name="GrayscaleCheck" Checked="OptionChanged" Unchecked="OptionChanged" AutomationProperties.Name="{DynamicResource Grayscale}"><TextBlock Text="{DynamicResource Grayscale}"/></CheckBox>
+        <TextBlock Text="{DynamicResource Copies}" Style="{StaticResource Label}" Margin="0,10,0,6"/>
+        <ComboBox x:Name="CopiesBox" SelectionChanged="CopiesChanged" AutomationProperties.Name="{DynamicResource Copies}"><ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/><ComboBoxItem Content="5"/></ComboBox>
+        <Button Content="{DynamicResource About}" Click="AboutClick" Margin="0,14,0,0"/>
+       </StackPanel>
+      </Expander>
+     </StackPanel>
+    </ScrollViewer>
    </Border>
   </Grid>
-  <Border Grid.Row="3" x:Name="BusyBar" Background="#EAF0E5" Padding="28,10" Visibility="Collapsed"><DockPanel><Button Content="{DynamicResource Cancel}" DockPanel.Dock="Right" Click="CancelClick" Padding="14,6" MinHeight="34"/><StackPanel Margin="0,0,18,0"><TextBlock x:Name="BusyText" FontSize="14"/><ProgressBar x:Name="JobBar" Height="4" Margin="0,8,0,0" IsIndeterminate="True" Foreground="{StaticResource Accent}"/></StackPanel></DockPanel></Border>
-  <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="28,17"><DockPanel>
-   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"><Button x:Name="PrintButton" Content="{DynamicResource Print}" Click="PrintClick" MinWidth="132" Margin="20,0,12,0" FontWeight="SemiBold"/><Button x:Name="ExportButton" Content="{DynamicResource Export}" Click="ExportClick" MinWidth="150" Style="{StaticResource Primary}"/></StackPanel>
-   <StackPanel VerticalAlignment="Center"><TextBlock x:Name="Summary" FontWeight="SemiBold" FontSize="16"/><TextBlock x:Name="PaperSummary" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/><TextBlock x:Name="Status" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="CalibrationStatus" Foreground="#85612B" FontSize="12" Margin="0,3,0,0"/></StackPanel>
-  </DockPanel></Border>
-  <Border x:Name="Completion" Grid.Row="2" Background="#F9FBF7" BorderBrush="#B7CDB8" BorderThickness="1" CornerRadius="18" Padding="38" Width="580" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-   <StackPanel><Border Background="#DDEBDF" Width="52" Height="52" CornerRadius="26" HorizontalAlignment="Left" Margin="0,0,0,18"><TextBlock Text="✓" FontSize="30" Foreground="{StaticResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock x:Name="CompletionTitle" FontFamily="Georgia" FontSize="30"/><TextBlock x:Name="CompletionFile" Margin="0,14,0,0" FontWeight="SemiBold"/><TextBlock x:Name="CompletionBody" Margin="0,10,0,22" Foreground="{StaticResource Muted}" LineHeight="24"/><WrapPanel><Button x:Name="OpenPdfButton" Content="{DynamicResource OpenPdf}" Click="OpenPdfClick" Style="{StaticResource Primary}" Margin="0,0,10,10"/><Button x:Name="ShowFolderButton" Content="{DynamicResource ShowFolder}" Click="ShowFolderClick" Margin="0,0,0,10"/></WrapPanel><Button Content="{DynamicResource Close}" Click="CompletionClose" HorizontalAlignment="Left" Margin="0,8,0,0"/></StackPanel>
+  <!-- Progress replaces the footer in place so the artwork never shifts during a job. -->
+  <Border Grid.Row="3" Panel.ZIndex="1" x:Name="BusyBar" Background="#EAF0E5" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="28,16" Visibility="Collapsed">
+   <DockPanel VerticalAlignment="Center">
+    <Button Content="{DynamicResource Cancel}" DockPanel.Dock="Right" Click="CancelClick" VerticalAlignment="Center"/>
+    <StackPanel Margin="0,0,18,0" VerticalAlignment="Center"><TextBlock x:Name="BusyText" FontSize="16" AutomationProperties.LiveSetting="Polite"/><ProgressBar x:Name="JobBar" Height="5" Margin="0,8,0,0" IsIndeterminate="True" Foreground="{StaticResource Accent}"/></StackPanel>
+   </DockPanel>
+  </Border>
+  <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="28,16">
+   <StackPanel>
+    <Grid>
+     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+      <TextBlock x:Name="Summary" FontWeight="SemiBold" FontSize="17"/>
+      <TextBlock x:Name="PaperSummary" FontSize="15" LineHeight="22" Foreground="{StaticResource Muted}" Margin="0,4,0,0" Visibility="Collapsed"/>
+      <TextBlock x:Name="Status" FontSize="15" LineHeight="22" Foreground="{StaticResource Muted}" Margin="0,4,0,0" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
+     </StackPanel>
+     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+      <Button x:Name="PrintButton" Content="{DynamicResource Print}" Click="PrintClick" MinWidth="150" Margin="0,0,12,0" Style="{StaticResource Primary}"/>
+      <Button x:Name="ExportButton" Content="{DynamicResource Export}" Click="ExportClick" MinWidth="150" Style="{StaticResource Primary}"/>
+     </StackPanel>
+    </Grid>
+    <Grid x:Name="PrintGuidance" Visibility="Collapsed" Margin="0,12,0,0">
+     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+      <TextBlock x:Name="CalibrationStatus" Foreground="#795221" FontSize="15" LineHeight="22"/>
+      <TextBlock x:Name="CalibrationPromptText" Text="{DynamicResource CalibrationPrompt}" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="22" Visibility="Collapsed"/>
+     </StackPanel>
+     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+      <Button x:Name="CalibrationButton" Content="{DynamicResource Calibration}" Click="CalibrationClick" Padding="12,8"/>
+      <Button x:Name="CalibrationLaterButton" Content="{DynamicResource Later}" Click="CalibrationLaterClick" Margin="8,0,0,0" Padding="12,8" Visibility="Collapsed"/>
+     </StackPanel>
+    </Grid>
+   </StackPanel>
+  </Border>
+  <Border x:Name="Completion" Grid.Row="2" Background="#F9FBF7" BorderBrush="#B7CDB8" BorderThickness="1" CornerRadius="18" Padding="28" Width="650" MaxWidth="720" MaxHeight="{Binding ActualHeight, ElementName=Workspace}" Margin="24,12" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" IsVisibleChanged="CompletionVisibilityChanged" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle">
+   <DockPanel LastChildFill="True">
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+     <Border Background="#DDEBDF" Width="32" Height="32" CornerRadius="16" DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Center"><TextBlock Text="✓" FontSize="22" Foreground="{StaticResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+     <TextBlock x:Name="CompletionTitle" FontFamily="Georgia" FontSize="28" AutomationProperties.LiveSetting="Polite"/>
+    </DockPanel>
+    <WrapPanel x:Name="CompletionActions" DockPanel.Dock="Bottom" Margin="0,18,0,-8">
+     <Button x:Name="OpenPdfButton" Content="{DynamicResource OpenPdf}" Click="OpenPdfClick" Style="{StaticResource Primary}" Margin="0,0,8,8"/>
+     <Button x:Name="ShowFolderButton" Content="{DynamicResource ShowFolder}" Click="ShowFolderClick" Margin="0,0,8,8"/>
+     <Button x:Name="BackToEditingButton" Content="{DynamicResource Close}" Click="CompletionClose" Background="Transparent" BorderBrush="{StaticResource Line}" Margin="0,0,0,8"/>
+    </WrapPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+     <StackPanel>
+      <TextBlock x:Name="CompletionFile" FontWeight="SemiBold" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+      <TextBlock x:Name="CompletionDetails" Margin="0,8,0,0" Foreground="{StaticResource Muted}" FontSize="16" LineHeight="24"/>
+      <TextBlock x:Name="CompletionBody" Margin="0,12,0,0" Foreground="{StaticResource Muted}" FontSize="16" LineHeight="24"/>
+     </StackPanel>
+    </ScrollViewer>
+   </DockPanel>
   </Border>
  </Grid>
 </Window>

@@ -8,6 +8,19 @@
         "resolved": "0.1.16",
         "contentHash": "qQcbsNMYVY+K5ELptax2S8thNMk0+rSQq3H/KdYj3LLcko8yTCz8y5KIvsKxIyAuTN0ZYNnfsZkM+0EvxTwHVA=="
       },
+      "Magick.NET-Q8-x64": {
+        "type": "Transitive",
+        "resolved": "15.0.0",
+        "contentHash": "RVfIbAddWlHEr6aJiYAYIRn1P7bQUoSv9GJN0fZmcatnenaD4KTtzoxOFYq67KXegLTsBQHsGdjzgGDW5d4Ing==",
+        "dependencies": {
+          "Magick.NET.Core": "15.0.0"
+        }
+      },
+      "Magick.NET.Core": {
+        "type": "Transitive",
+        "resolved": "15.0.0",
+        "contentHash": "mP/VovMRuXBX2Rcnn1wWu0Zur6cjsf8IQhmTUCrasEk8cyAtN5sjHE7NxiH88whw8/2mjRvuphKUwj6bAZslpQ=="
+      },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
         "resolved": "8.0.2",
@@ -32,11 +45,28 @@
       "mosaic.core": {
         "type": "Project"
       },
+      "mosaic.imaging": {
+        "type": "Project",
+        "dependencies": {
+          "Magick.NET-Q8-x64": "[15.0.0, )",
+          "Mosaic.Core": "[1.0.0, )"
+        }
+      },
       "mosaic.output": {
         "type": "Project",
         "dependencies": {
           "Mosaic.Core": "[1.0.0, )",
           "PDFsharp": "[6.2.4, )"
+        }
+      }
+    },
+    "net10.0-windows7.0/win-x64": {
+      "Magick.NET-Q8-x64": {
+        "type": "Transitive",
+        "resolved": "15.0.0",
+        "contentHash": "RVfIbAddWlHEr6aJiYAYIRn1P7bQUoSv9GJN0fZmcatnenaD4KTtzoxOFYq67KXegLTsBQHsGdjzgGDW5d4Ing==",
+        "dependencies": {
+          "Magick.NET.Core": "15.0.0"
         }
       }
     }

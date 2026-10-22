@@ -39,14 +39,15 @@ internal static class ExtendedChecks
         sw.Restart();string cpuPath=await cpu.EnhanceAsync(source,null,CancellationToken.None,true);double cpuSeconds=sw.Elapsed.TotalSeconds;
         using var gpuImage=new MagickImage(gpuPath);using var cpuImage=new MagickImage(cpuPath);
         double difference=gpuImage.Compare(cpuImage,ErrorMetric.RootMeanSquared);
-        if(gpuImage.Width!=2400||gpuImage.Height!=1800||difference>.015)throw new Exception("large AI output consistency");
+        int factor=EnhancementService.OutputScale(source);
+        if(gpuImage.Width!=source.Width*factor||gpuImage.Height!=source.Height*factor||difference>.015)throw new Exception("large AI output consistency");
         // Flat strips adjacent to internal128px/64px tile boundaries may differ by real art;
         // compare GPU/CPU on those coordinates rather than mistaking real linework for a seam.
         double edgeDifference=0;int edges=0;
-        for(int x=256;x<2400;x+=256)
+        for(int x=256;x<gpuImage.Width;x+=256)
         {
             using var a=gpuImage.Clone();using var b=cpuImage.Clone();
-            a.Crop(new MagickGeometry(x-2,0,4,1800));b.Crop(new MagickGeometry(x-2,0,4,1800));
+            a.Crop(new MagickGeometry(x-2,0,4,gpuImage.Height));b.Crop(new MagickGeometry(x-2,0,4,gpuImage.Height));
             edgeDifference+=a.Compare(b,ErrorMetric.RootMeanSquared);edges++;
         }
         edgeDifference/=edges;

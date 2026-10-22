@@ -37,13 +37,13 @@ if (-not $SkipTests) {
     foreach ($checkName in @('Mosaic.Core.Checks','Mosaic.Storage.Checks','Mosaic.Output.Smoke','Mosaic.Imaging.Checks','Mosaic.App.Checks')) {
         $checkProject = Join-Path $repoRoot "tests/$checkName/$checkName.csproj"
         if (-not (Test-Path -LiteralPath $checkProject)) { throw "Required release check project missing: $checkName" }
-        & $DotnetPath run --project $checkProject -c Release
+        & $DotnetPath run --project $checkProject -c Release -r win-x64 -p:RestoreLockedMode=true
         if ($LASTEXITCODE -ne 0) { throw "$checkName failed." }
     }
 }
 
 $publishArgs = @('publish','src/Mosaic.App/Mosaic.App.csproj','-c','Release','-r','win-x64','--self-contained','true',
-    '-p:PublishTrimmed=false','-p:PublishAot=false','-p:PublishSingleFile=false',"-p:Version=$Version",'-o',$publishPath)
+    '-p:PublishTrimmed=false','-p:PublishAot=false','-p:PublishSingleFile=false','-p:RestoreLockedMode=true',"-p:Version=$Version",'-o',$publishPath)
 if ($NoRestore) { $publishArgs += '--no-restore' }
 & $DotnetPath @publishArgs
 if ($LASTEXITCODE -ne 0) { throw 'Self-contained publication failed.' }
@@ -52,6 +52,7 @@ $requiredFiles = @('MosaicTemplateStudio.exe','MosaicTemplateStudio.dll','Mosaic
     'hostfxr.dll','hostpolicy.dll','coreclr.dll','PresentationFramework.dll','ai/waifu2x-ncnn-vulkan.exe',
     'ai/mosaic-cunet-cpu.exe','ai/msvcp140.dll','ai/vcomp140.dll','ai/vcruntime140.dll','ai/vcruntime140_1.dll',
     'ai/assets.json','ai/models-cunet/scale2.0x_model.bin','ai/models-cunet/scale2.0x_model.param',
+    'ai/models-cunet/noise1_scale2.0x_model.bin','ai/models-cunet/noise1_scale2.0x_model.param',
     'ai/LICENSE-Microsoft-runtime.txt','ai/Microsoft-REDIST.txt','ai/LICENSE-ncnn.txt',
     'ai/LICENSE-waifu2x-model.txt','ai/LICENSE-waifu2x-ncnn.txt',
     'licenses/PDFsharp-6.2.4-LICENSE.txt','licenses/Magick.NET-15.0.0-LICENSE.txt',

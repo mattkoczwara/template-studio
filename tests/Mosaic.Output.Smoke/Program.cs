@@ -21,6 +21,7 @@ internal static class Program
         Directory.CreateDirectory(folder);
         try
         {
+            _checks += EnhancementOutputChecks.Run(folder); if (args.Contains("--enhancement-only")) return 0;
             string image = Path.Combine(folder, "fixture.png");
             var bitmap = CreateFixture(image);
             var source = new SourceInfo(image, image, "synthetic-fixture", bitmap.PixelWidth, bitmap.PixelHeight, "PNG", new FileInfo(image).Length, image);
@@ -29,6 +30,7 @@ internal static class Program
                 ("24-inch",24m,18m,OrientationMode.Auto,0m),
                 ("60-inch",60m,45m,OrientationMode.Auto,0m),
                 ("fractional-trim",23.375m,17.125m,OrientationMode.Portrait,.25m),
+                ("fractional-exact",24.125m,18.09375m,OrientationMode.Auto,0m),
                 ("landscape",20m,8.5m,OrientationMode.Auto,0m),
                 ("manual",24m,18m,OrientationMode.Landscape,0m) })
             {
