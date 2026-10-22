@@ -1,5 +1,7 @@
 # First-release requirement and acceptance record
 
+For the current coordinated QA results, package identity and **Blocked** production decision, read [v1.0.0 release readiness](RELEASE_READINESS.md). The dated records below retain historical evidence.
+
 This is an implementation-to-requirement map for [the binding product definition](POSTER_STUDIO_PRODUCT_DEFINITION.md), not a replacement specification. **Software implementation and local checks do not establish production acceptance on the artist's printer or computer.** In particular, the mandatory physical Epson assembly test, clean offline Windows installation and independent target-user task completion remain separate acceptance gates.
 
 Evidence labels below:

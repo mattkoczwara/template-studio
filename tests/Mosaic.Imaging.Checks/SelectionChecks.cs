@@ -104,6 +104,13 @@ internal static class SelectionChecks
         try
         {
             using (var replacement = new MagickImage(MagickColors.White, (uint)source.Width, (uint)source.Height)) replacement.Write(source.NormalizedPath);
+            foreach (int rotation in new[] { 0, 180 })
+            {
+                bool standardRejected = false;
+                try { await images.GetOutputImageAsync(source, rotation); }
+                catch (ImagePipelineException ex) when (ex.Code == "imageReadFailed") { standardRejected = true; }
+                Check(standardRejected, $"Standard rotation {rotation} accepted tampered normalized input");
+            }
             try { await enhancer.EnhanceAsync(source, null, CancellationToken.None, forceCpu: true); }
             catch (EnhancementException ex) when (ex.Code == "aiFailed") { normalizedRejected = true; }
         }

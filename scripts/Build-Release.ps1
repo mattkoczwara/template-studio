@@ -34,6 +34,7 @@ $reportsPath = Join-Path $repoRoot 'artifacts/verification'
 New-Item -ItemType Directory -Force -Path $publishPath,$installerPath,$reportsPath | Out-Null
 
 if (-not $SkipTests) {
+    & (Join-Path $PSScriptRoot 'Check-Repository.ps1')
     foreach ($checkName in @('Mosaic.Core.Checks','Mosaic.Storage.Checks','Mosaic.Output.Smoke','Mosaic.Imaging.Checks','Mosaic.App.Checks')) {
         $checkProject = Join-Path $repoRoot "tests/$checkName/$checkName.csproj"
         if (-not (Test-Path -LiteralPath $checkProject)) { throw "Required release check project missing: $checkName" }

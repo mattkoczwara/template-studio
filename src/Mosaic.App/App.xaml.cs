@@ -59,18 +59,18 @@ internal static class LocalLog
 {
     // Keep the operation, exception chain and stack, without arbitrary I/O messages
     // that can contain a user's artwork filenames or output paths.
-    public static void Failure(string stage, Exception error)
+    public static void Failure(string stage, Exception error) => Write(stage, DescribeFailure(error));
+
+    internal static string DescribeFailure(Exception error)
     {
         var details = new System.Text.StringBuilder();
         for (Exception? current = error; current != null; current = current.InnerException)
         {
             details.AppendLine($"{current.GetType().FullName} HResult=0x{current.HResult:X8}");
-            if (current is ObjectDisposedException disposed) details.AppendLine("Object: " + disposed.ObjectName);
-            else if (current is InvalidOperationException) details.AppendLine(current.Message);
             if (current is Mosaic.Storage.ProjectStorageException storage) details.AppendLine("Code: " + storage.Code);
             details.AppendLine(current.StackTrace);
         }
-        Write(stage, details.ToString());
+        return details.ToString();
     }
 
     public static void Write(string stage, string kind = "")

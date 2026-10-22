@@ -862,14 +862,17 @@ public partial class MainWindow : Window
         var calibrationPaper = state.Paper with { Orientation = layout?.Orientation == SheetOrientation.Landscape ? OrientationMode.Landscape : OrientationMode.Portrait };
         var prior = preferences.Calibrations.LastOrDefault(c => c.Profile == state.PrinterProfile && c.Orientation == (layout?.Orientation ?? SheetOrientation.Portrait));
         var dialog = new CalibrationWindow(calibrationPaper, state.PrinterProfile, prior, pdf, printer, state.Grayscale) { Owner = this };
-        if (dialog.ShowDialog() == true && dialog.Record != null)
-        {
-            preferences = preferences with { Calibrations = preferences.Calibrations.Where(c => !(c.PrinterName == dialog.Record.PrinterName && c.Pathway == dialog.Record.Pathway && c.Profile == dialog.Record.Profile && c.Orientation == dialog.Record.Orientation)).Append(dialog.Record).ToList(), CalibrationPromptDismissed = true };
-            state = state with { PrinterName = dialog.Record.PrinterName };
-            SavePreferences(); NoticeBar.Visibility = Visibility.Collapsed;
-            if (dialog.Record.EdgeClipping && TryCommitLayout(state with { Paper = state.Paper with { MarginInches = Math.Max(state.Paper.MarginInches, .25m) } }, false)) { Changed(); SyncControls(); }
-            RefreshLayout();
-        }
+        if (dialog.ShowDialog() == true && dialog.Record != null) ApplyCalibrationRecord(dialog.Record);
+    }
+    private void ApplyCalibrationRecord(CalibrationRecord record)
+    {
+        preferences = preferences with { Calibrations = preferences.Calibrations.Where(c => !(c.PrinterName == record.PrinterName && c.Pathway == record.Pathway && c.Profile == record.Profile && c.Orientation == record.Orientation)).Append(record).ToList(), CalibrationPromptDismissed = true };
+        var priorState = state;
+        state = state with { PrinterName = record.PrinterName };
+        SavePreferences(); NoticeBar.Visibility = Visibility.Collapsed;
+        if (record.EdgeClipping) TryCommitLayout(state with { Paper = state.Paper with { MarginInches = Math.Max(state.Paper.MarginInches, .25m) } }, false);
+        if (state != priorState) { Changed(); SyncControls(); }
+        else RefreshLayout();
     }
     private void AboutClick(object sender, RoutedEventArgs e)
     {

@@ -1,5 +1,7 @@
 # Windows distribution
 
+**Production v1.0.0 publication is blocked by required external acceptance.** The [current release report](RELEASE_READINESS.md) identifies the latest verified candidate and outstanding gates; package records below are dated evidence.
+
 The release is a self-contained Windows x64 .NET 10 folder wrapped by a per-user Inno Setup 7.1 installer. It requires Windows 10 build 19041 or later and installs under `%LocalAppData%\Programs\Mosaic Template Studio`. End users do not install .NET, Python, CUDA or model packages. NVIDIA acceleration uses the existing Vulkan-capable graphics driver; Standard remains usable if enhancement is unavailable.
 
 The English/Polish installer provides a Start-menu shortcut, a checked-by-default desktop shortcut, optional `.mosaic` Open With association, and normal Windows uninstall. It requests no administrator rights. Reinstall uses a stable application ID. The uninstaller removes installed application files and its association/shortcuts; it has no deletion directives for personal projects, settings or recovery.
@@ -52,6 +54,8 @@ Installer compilation, payload checks and an install/uninstall smoke test on the
 
 `scripts/Verify-Installer.ps1` installs into a new workspace test directory, checks every installed file against the publication hash manifest, verifies desktop/Start shortcuts and project association, then launches the installed executable with `--verify-install` and isolated workspace test data. That entry exercises the real installed runtime journey and produces `runtime-check/installed-runtime.json`; exit 0 and `passed: true` are required. The script then runs the normal uninstaller and confirms an unknown personal-project sentinel survives. It refuses to overwrite an already registered app installation. `-Language polish` exercises the Polish installer resources. These checks do not simulate a clean offline Windows machine or establish physical printer behavior.
 
+Failed payload/runtime checks also run the normal uninstaller in `finally` and retain `failure.txt` in the test directory. `-ManifestPath` selects the exact publication manifest for a candidate instead of the default current-build manifest.
+
 The release package is unsigned unless `release-package.json` reports a valid signature. No signing certificate was supplied. Signing/reputation review is a distribution consideration and cannot be manufactured by a local build. Windows may display an unknown-publisher reputation prompt for an unsigned installer.
 
 ## Earlier package before editor and enhancement updates
@@ -63,9 +67,9 @@ The same final hash passed both English and Polish per-user installation/runtime
 These actual installed-host journeys do not establish clean-machine offline behavior, signing reputation, physical printer measurements, fluent Polish review or independent artist usability. See [ACCEPTANCE.md](ACCEPTANCE.md) for the complete requirement map and remaining external acceptance gates.
 
 
-## Current consolidated package — October 22, 2026
+## Earlier consolidated package — October 22, 2026
 
-The final source build includes the selected mild-denoise CUNet weights, rebuilt pinned CPU worker, current editor/lifecycle changes and synchronized output inspector. The unsigned self-contained installer is **65,924,711 bytes**, SHA-256 `0af5c12ad6a16fc7f7232d5f04b698217895d6bed0357be8e712f448aaf87ccf`. Its **459 payload files** total **207,120,813 bytes**. It was built with `scripts/Build-Release.ps1 -SkipTests` after focused tests; the script verifies all model/runtime/license payload hashes and now uses consistent `win-x64` locked restores for release checks.
+This preceding build includes the selected mild-denoise CUNet weights, rebuilt pinned CPU worker, editor/lifecycle changes and synchronized output inspector, before the final QA corrections. Its unsigned self-contained installer was **65,924,711 bytes**, SHA-256 `0af5c12ad6a16fc7f7232d5f04b698217895d6bed0357be8e712f448aaf87ccf`. Its **459 payload files** totaled **207,120,813 bytes**. It was built with `scripts/Build-Release.ps1 -SkipTests` after focused tests; the script verifies all model/runtime/license payload hashes and uses consistent `win-x64` locked restores for release checks. The [current candidate identity and final QA evidence](RELEASE_READINESS.md) supersede this historical package.
 
 The final English install/runtime/uninstall cycle passed on this development host: every payload hash matched; Desktop/Start shortcuts and the project association pointed to the installed executable; **439 integrated editor checks** passed on bundled runtime 10.0.13, including EN/PL comparison, current-recipe persistence/migration and lifecycle tests. Normal uninstall preserved the unknown personal-project sentinel and removed only its registered application files/shortcuts/association. Evidence: `artifacts/installer-checks/e3654804f1484771a56d470b3a9784c8/result.json` and its `runtime-check/installed-runtime.json`. Earlier Polish installer resources were unchanged and were not retested for this package.
 

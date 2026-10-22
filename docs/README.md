@@ -13,6 +13,7 @@ Start with the [project overview and first-template guide](../README.md).
 | Launch the latest development sources | [Desktop launcher setup and troubleshooting](DEVELOPMENT.md) |
 | Understand how the code fits together | [Implemented architecture](IMPLEMENTATION.md) |
 | Check implementation and remaining validation | [Acceptance map](ACCEPTANCE.md) |
+| Review the v1.0.0 release decision and current evidence | [Release readiness](RELEASE_READINESS.md) · [Changelog](../CHANGELOG.md) |
 | Check the independent review and fixes | [Review resolution](CODE_REVIEW_RESOLUTION.md) |
 | Review versions and redistribution terms | [Dependencies](DEPENDENCIES.md) · [Third-party notices](../THIRD-PARTY-NOTICES.md) |
 | Contribute a fix | [Contribution guide](../CONTRIBUTING.md) |

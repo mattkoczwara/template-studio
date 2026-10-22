@@ -19,7 +19,7 @@ internal static class Program
         {
             try
             {
-                int count = args.Contains("--enhancement-project-only") ? await window.RunEnhancementProjectChecksAsync(output) : args.Contains("--comparison-only") ? await ComparisonChecks.RunAsync(window, output) : args.Contains("--lifecycle") ? await window.RunLifecycleChecksAsync(output) : await window.RunAcceptanceChecksAsync(output);
+                int count = args.Contains("--release-app-only") ? await window.RunReleaseAppChecksAsync(output) : args.Contains("--enhancement-project-only") ? await window.RunEnhancementProjectChecksAsync(output) : args.Contains("--comparison-only") ? await ComparisonChecks.RunAsync(window, output) : args.Contains("--lifecycle") ? await window.RunLifecycleChecksAsync(output) : await window.RunAcceptanceChecksAsync(output);
                 await application.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 if (dispatcherErrors.Count > 0) throw new AggregateException("Unhandled dispatcher exceptions during checks", dispatcherErrors);
                 Console.WriteLine($"PASS: {count} {(args.Contains("--lifecycle") ? "lifecycle" : "integrated editor")} checks; no unhandled dispatcher exceptions.");
