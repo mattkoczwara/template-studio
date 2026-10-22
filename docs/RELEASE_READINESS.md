@@ -36,7 +36,11 @@ Fresh English/Polish editor and compact completion renders were visually reviewe
 
 ## Candidate package
 
-The fresh unsigned self-contained installer is **65,929,449 bytes**, SHA-256 `1c426179f6ac530f1bf3d4550f1c09b08242e7846bed904c9d0b176e03454439`. Its **459 payload files total 207,129,121 bytes**, including .NET 10.0.13, both native AI workers, selected models and license notices. Build and pinned payload verification passed; the complete file manifest is `artifacts/verification/published-files.json` and the installer identity is `release-package.json` beside it. Installer: `artifacts/installer/MosaicTemplateStudio-1.0.0-win-x64-Setup.exe`, with adjacent `.sha256`.
+The final unsigned self-contained installer is **65,925,901 bytes**, SHA-256 `e62fa73037bdee3fe5a714b5a8de838af408d5bf0c9894df98cbfe45b015801e`. Its **459 payload files total 207,129,125 bytes**, including .NET 10.0.13, both native AI workers, selected models and license notices. The executable's product version is `1.0.0+7be5808151ef4f196cec80a30505d07a87015cf8`, identifying the exact committed application source. It was rebuilt after the QA commit solely to align that provenance (`artifacts/verification/v1-committed-package.log`). Build and pinned payload verification passed; the complete file manifest is `artifacts/verification/published-files.json` and the installer identity is `release-package.json` beside it. Installer: `artifacts/installer/MosaicTemplateStudio-1.0.0-win-x64-Setup.exe`, with adjacent `.sha256`.
+
+**Both final English and Polish install/runtime/uninstall cycles passed on this development host.** Each matched all 459 file hashes, verified Desktop/Start shortcuts and the project association, then passed **463 integrated editor checks on bundled .NET 10.0.13**. Installation, installed runtime and normal uninstall all returned 0. Unknown personal-project sentinels survived; application registrations and shortcuts were removed. Exact final evidence: `artifacts/installer-checks/c9b82911b22f4304bf29814be67bb446/result.json` (English) and `artifacts/installer-checks/caa1ea4bb2e948f58d9a09beb3ee9676/result.json` (Polish), with `runtime-check/installed-runtime.json` in each directory. Both identify the final installer hash above. These are development-host checks with the network available, not clean offline-machine acceptance.
+
+An intentionally incorrect payload checksum also failed as expected; the normal uninstaller removed the disposable app/registration and preserved its personal-file sentinel. Evidence: `artifacts/verification/v1-installer-failure-recovery.json` and `artifacts/installer-checks/15f870980a12432aae2caa72d92738a8/`. Final documentation/asset validation passed **134 local links**, pinned AI hashes and banner XML; whitespace and PowerShell syntax checks passed. The consolidated local record is `artifacts/verification/v1-final-summary.json`.
 
 The current NuGet advisory query completed against the official feed on October 22, 2026 and reported no known vulnerable application packages, including transitive packages (`artifacts/verification/v1-dependency-audit.json`). Native worker/model payloads are separately hash-pinned and their redistribution notices are included.
 
@@ -57,3 +61,15 @@ Signing remains a documented distribution limitation: no signing certificate was
 ## Publication boundary
 
 Integrate passing engineering changes through a pull request. Keep `v1.0.0` and the production GitHub Release unpublished until the required external acceptance has actual evidence. Release notes are prepared in [the changelog](../CHANGELOG.md). Do not label this candidate production accepted, or treat a Windows spool handoff as a physical measurement.
+
+## Continuation and manual PR handoff
+
+The application fixes are committed as `7be5808151ef4f196cec80a30505d07a87015cf8` on `codex/final-release-qa`, based on main `3d98db93516b8495e6c98a95cd5c787f1614bc7e`. Subsequent release-report changes do not alter application sources or packaged inputs. The branch is pushed to the existing public repository.
+
+The GitHub connector rejected issue/PR writes with HTTP 403; the GitHub CLI was unauthenticated and browser automation could not initialize. The user explicitly chose a **manual PR handoff**. No PR, merge, tag or GitHub Release was created by this pass. Hosted CI for this change remains pending PR creation; its new Output check is included in the workflow. Existing main is preserved.
+
+[Open the release QA pull-request comparison](https://github.com/mattkoczwara/template-studio/compare/main...codex/final-release-qa?expand=1). Suggested title: **Harden v1.0 candidate and record production acceptance gates**. Describe the five corrections above and link this report as validation evidence; state that production remains Blocked.
+
+A paste-ready description is retained locally as `artifacts/verification/v1-pr-description.md`. All implementation, local verification, packaging and installer checks for this pass are complete. Remaining work is the manual PR/hosted-check workflow and the external acceptance gates; no uncommitted application changes or additional routine feature development are intended.
+
+Next: create the PR and require hosted checks before integration; complete the external acceptance checklist above and record actual observations. Do not repeat passing local suites unless application changes or a new failure warrants it. After all required gates pass, build from the final release commit, verify the candidate, create the annotated `v1.0.0` tag and publish the installer/checksum with accurate notes; verify the remotely downloaded artifact. Current software evidence must not be substituted for physical or human acceptance.
