@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Mosaic.Core;
@@ -29,12 +30,15 @@ internal sealed class CalibrationWindow : Window
     {
         this.paper = paper; this.profile = profile; this.pdf = pdf; this.printer = printer; this.grayscale = grayscale;
         Style = (Style)Application.Current.Resources[typeof(Window)];
-        Title = Lang.T("CalibrationTitle"); Width = 630; Height = 860; MinHeight = 600;
+        Title = Lang.T("CalibrationTitle"); Width = 650; Height = 820; MinWidth = 500; MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; Background = new SolidColorBrush(Color.FromRgb(248, 250, 246));
-        body.Margin = new Thickness(30);
-        Content = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var layout = new Grid();
+        layout.RowDefinitions.Add(new()); layout.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        body.Margin = new Thickness(28, 24, 28, 18);
+        layout.Children.Add(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        Content = layout;
         body.Children.Add(new TextBlock { Text = Lang.T("CalibrationTitle"), FontFamily = new FontFamily("Georgia"), FontSize = 30 });
-        body.Children.Add(new TextBlock { Text = Lang.T("CalibrationBody"), Margin = new Thickness(0, 14, 0, 18), LineHeight = 24 });
+        body.Children.Add(new TextBlock { Text = Lang.T("CalibrationBody"), Margin = new Thickness(0, 12, 0, 16), LineHeight = 24 });
         var actions = new WrapPanel();
         exportButton.Content = Lang.T("CalibrationPdf"); exportButton.Margin = new Thickness(0, 0, 10, 8); exportButton.Click += ExportClick;
         printButton.Content = Lang.T("CalibrationPrint"); printButton.Margin = new Thickness(0, 0, 0, 8); printButton.Click += PrintClick;
@@ -56,22 +60,35 @@ internal sealed class CalibrationWindow : Window
         AddField("MeasuredX", measuredX, x); AddField("MeasuredY", measuredY, y); body.Children.Add(measures);
         measuredX.Text = (prior?.MeasuredXInches ?? 4).ToString("0.####", Lang.Culture); measuredY.Text = (prior?.MeasuredYInches ?? 4).ToString("0.####", Lang.Culture);
         AddField("DriverSettings", driverSettings); driverSettings.Text = prior?.DriverSettings ?? ""; driverSettings.TextWrapping = TextWrapping.Wrap; driverSettings.MinHeight = 62;
-        clipped.Content = Lang.T("EdgeClipping"); clipped.IsChecked = prior?.EdgeClipping ?? false; body.Children.Add(clipped);
-        enabled.Content = Lang.T("ApplyCorrection"); enabled.IsChecked = prior?.Enabled ?? false; body.Children.Add(enabled);
-        body.Children.Add(new TextBlock { Text = Lang.T("CalibrationWarning"), FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(117, 83, 40)), Margin = new Thickness(0, 13, 0, 15), LineHeight = 21 });
-        error.Foreground = Brushes.Firebrick; error.Margin = new Thickness(0, 0, 0, 10); body.Children.Add(error);
+        clipped.Content = new TextBlock { Text = Lang.T("EdgeClipping"), TextWrapping = TextWrapping.Wrap }; clipped.IsChecked = prior?.EdgeClipping ?? false; body.Children.Add(clipped);
+        enabled.Content = new TextBlock { Text = Lang.T("ApplyCorrection"), TextWrapping = TextWrapping.Wrap }; enabled.IsChecked = prior?.Enabled ?? false; body.Children.Add(enabled);
+        System.Windows.Automation.AutomationProperties.SetName(clipped, Lang.T("EdgeClipping"));
+        System.Windows.Automation.AutomationProperties.SetName(enabled, Lang.T("ApplyCorrection"));
+        body.Children.Add(new TextBlock { Text = Lang.T("CalibrationWarning"), FontSize = 15, Foreground = new SolidColorBrush(Color.FromRgb(117, 83, 40)), Margin = new Thickness(0, 12, 0, 0), LineHeight = 23 });
+        var footerBody = new StackPanel();
+        error.Foreground = Brushes.Firebrick; error.FontSize = 15; error.LineHeight = 23; error.Margin = new Thickness(0, 0, 0, 10); footerBody.Children.Add(error);
+        var errorStyle = new Style(typeof(TextBlock), (Style)Application.Current.Resources[typeof(TextBlock)]);
+        var noMessage = new Trigger { Property = TextBlock.TextProperty, Value = "" };
+        noMessage.Setters.Add(new Setter(VisibilityProperty, Visibility.Collapsed)); errorStyle.Triggers.Add(noMessage); error.Style = errorStyle;
+        System.Windows.Automation.AutomationProperties.SetLiveSetting(error, System.Windows.Automation.AutomationLiveSetting.Polite);
         var footer = new WrapPanel();
-        saveButton.Content = Lang.T("SaveMeasurements"); saveButton.Style = (Style)Application.Current.Resources["Primary"]; saveButton.Click += SaveClick; saveButton.Margin = new Thickness(0, 0, 10, 0);
-        var cancel = new Button { Content = Lang.T("Close") }; cancel.Click += (_, _) => { if (job != null) job.Cancel(); else Close(); };
-        footer.Children.Add(saveButton); footer.Children.Add(cancel); body.Children.Add(footer);
+        saveButton.Content = Lang.T("SaveMeasurements"); saveButton.Style = (Style)Application.Current.Resources["Primary"]; saveButton.Click += SaveClick; saveButton.Margin = new Thickness(0, 0, 10, 6);
+        var cancel = new Button { Content = Lang.T("Close"), Margin = new Thickness(0, 0, 0, 6) }; cancel.Click += (_, _) => CancelOrClose();
+        footer.Children.Add(saveButton); footer.Children.Add(cancel); footerBody.Children.Add(footer);
+        var footerShell = new Border { Background = Brushes.White, BorderBrush = (Brush)Application.Current.Resources["Line"], BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(28, 14, 28, 10), Child = footerBody };
+        Grid.SetRow(footerShell, 1); layout.Children.Add(footerShell);
+        KeyDown += (_, e) => { if (e.Key == Key.Escape && !printerBox.IsDropDownOpen && !pathwayBox.IsDropDownOpen) { CancelOrClose(); e.Handled = true; } };
         Closing += (_, e) => { if (job != null) { job.Cancel(); e.Cancel = true; } };
     }
     private void AddField(string key, Control control, StackPanel? parent = null)
     {
         var container = parent ?? body;
-        container.Children.Add(new TextBlock { Text = Lang.T(key), FontSize = 14, Margin = new Thickness(0, 14, 0, 6) });
+        var label = new TextBlock { Text = Lang.T(key), FontSize = 15, LineHeight = 22, Margin = new Thickness(0, 12, 0, 6) };
+        container.Children.Add(label);
+        System.Windows.Automation.AutomationProperties.SetLabeledBy(control, label);
         System.Windows.Automation.AutomationProperties.SetName(control, Lang.T(key)); container.Children.Add(control);
     }
+    private void CancelOrClose() { if (job != null) job.Cancel(); else Close(); }
     private async void ExportClick(object sender, RoutedEventArgs e)
     {
         var dialog = new SaveFileDialog { Filter = Lang.T("PdfFilter"), FileName = "Mosaic-calibration.pdf" };

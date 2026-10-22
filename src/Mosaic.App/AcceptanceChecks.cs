@@ -12,7 +12,14 @@ namespace Mosaic.App;
 
 public partial class MainWindow
 {
-    internal void FinishChecks() { closing = true; dirty = false; recoveryTimer.Stop(); recoveryCancellation.Cancel(); pendingRecovery?.Dispose(); recovery.Dispose(); sourceLease?.Dispose(); }
+    internal async Task FinishChecksAsync()
+    {
+        job?.Cancel();
+        if (jobCompletion != null) await jobCompletion.Task;
+        recoveryTimer.Stop(); recoveryCancellation.Cancel();
+        if (recoveryTask != null) await recoveryTask;
+        closing = true; Close();
+    }
     // Runs the real editor operations on its dispatcher, with isolated files/settings. No printer jobs.
     internal async Task<int> RunAcceptanceChecksAsync(string directory)
     {
@@ -38,6 +45,7 @@ public partial class MainWindow
             }
         }
         Check(PrintButton.IsEnabled == false && ExportButton.IsEnabled == false, "empty output controls");
+        count += await CheckArrivalLayoutsAsync(directory);
         ProjectMenuClick(ProjectButton, new RoutedEventArgs());
         Check(ProjectButton.ContextMenu.Items.OfType<MenuItem>().Any(item => Equals(item.Header, Lang.T("About")) && item.IsEnabled), "cache cleanup accessible before image import");
         ProjectButton.ContextMenu.IsOpen = false;
@@ -220,6 +228,8 @@ public partial class MainWindow
             emptyWindow.pendingRecovery = emptyWindow.recovery.ClaimPending(); emptyWindow.ShowNotice(true);
             Check(emptyWindow.pendingRecovery?.Path == interrupted.RecoveryPath, "second window claims only interrupted recovery");
             emptyWindow.NoticeLaterClick(emptyWindow, new RoutedEventArgs()); emptyWindow.Close();
+            if (emptyWindow.closeTask != null) await emptyWindow.closeTask;
+            Check(!emptyWindow.IsVisible && emptyWindow.resourcesDisposed, "empty close reaches Closed and releases resources");
             Check(File.Exists(interrupted.RecoveryPath) && File.Exists(recovery.RecoveryPath), "Later and empty close preserve deferred and other live recovery");
             pendingRecovery = recovery.ClaimPending();
             Check(pendingRecovery?.Path == interrupted.RecoveryPath, "deferred recovery is offered to a later session");
@@ -230,7 +240,7 @@ public partial class MainWindow
         completedPdf = largePdf; completedSnapshot = snapshot; completedPrinter = null; RefreshCompletion();
         Capture("export-complete-en.png");
         LanguageBox.SelectedIndex = 1;
-        Check(CompletionTitle.Text == Lang.T("ExportedTitle") && CompletionBody.Text.Contains("60 × 45"), "completed export re-localizes and retains exported geometry");
+        Check(CompletionTitle.Text == Lang.T("ExportedTitle") && CompletionDetails.Text.Contains("60 × 45"), "completed export re-localizes and retains exported geometry");
         Capture("export-complete-pl.png");
         foreach (string language in new[] { "en", "pl" })
         foreach (decimal margin in new[] { 0m, .25m })
@@ -245,8 +255,15 @@ public partial class MainWindow
             if (margin > 0 && !guide) Capture($"margin-complete-{language}.png");
         }
         Completion.Visibility = Visibility.Collapsed;
+        completedSnapshot = snapshot;
+        count += await CheckRefinedEditorAsync(directory);
+        count += await CheckFinalPolishAsync(directory, project);
+        count += await RunLifecycleChecksAsync(Path.Combine(directory, "lifecycle"));
+        count += await ComparisonChecks.RunAsync(this, Path.Combine(directory, "comparison"));
+        string previousLanguage = Lang.Language;
+        try { count += await RunEnhancementProjectChecksAsync(Path.Combine(directory, "enhancement-projects")); }
+        finally { Lang.Apply(previousLanguage); }
         dirty = false;
-        closing = true; recoveryTimer.Stop(); recoveryCancellation.Cancel();
         File.WriteAllText(Path.Combine(directory, "app-checks.txt"), $"PASS: {count} integrated editor checks. No physical print jobs submitted.\n");
         return count;
     }

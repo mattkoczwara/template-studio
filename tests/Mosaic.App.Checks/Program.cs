@@ -11,14 +11,28 @@ internal static class Program
         Directory.CreateDirectory(output);
         int exitCode = 1;
         var application = new App(); application.InitializeComponent();
+        var dispatcherErrors = new List<Exception>();
+        application.DispatcherUnhandledException += (_, e) => { dispatcherErrors.Add(e.Exception); Console.Error.WriteLine(e.Exception); e.Handled = true; };
         var window = new MainWindow(["--checks", "--en"], Path.Combine(output, "local-state-" + Guid.NewGuid().ToString("N")));
         application.MainWindow = window;
         window.ContentRendered += async (_, _) =>
         {
-            try { int count = await window.RunAcceptanceChecksAsync(output); Console.WriteLine($"PASS: {count} integrated editor checks; rendered EN/PL views at 100/125/150%."); exitCode = 0; }
+            try
+            {
+                int count = args.Contains("--enhancement-project-only") ? await window.RunEnhancementProjectChecksAsync(output) : args.Contains("--comparison-only") ? await ComparisonChecks.RunAsync(window, output) : args.Contains("--lifecycle") ? await window.RunLifecycleChecksAsync(output) : await window.RunAcceptanceChecksAsync(output);
+                await application.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                if (dispatcherErrors.Count > 0) throw new AggregateException("Unhandled dispatcher exceptions during checks", dispatcherErrors);
+                Console.WriteLine($"PASS: {count} {(args.Contains("--lifecycle") ? "lifecycle" : "integrated editor")} checks; no unhandled dispatcher exceptions.");
+                exitCode = 0;
+            }
             catch (Exception ex) { Console.Error.WriteLine(ex); File.WriteAllText(Path.Combine(output, "failure.txt"), ex.ToString()); }
-            finally { window.FinishChecks(); application.Shutdown(); }
+            finally
+            {
+                try { await window.FinishChecksAsync(); }
+                catch (Exception ex) { Console.Error.WriteLine(ex); exitCode = 1; }
+                application.Shutdown();
+            }
         };
-        window.Show(); application.Run(); return exitCode;
+        window.Show(); application.Run(); return dispatcherErrors.Count > 0 ? 1 : exitCode;
     }
 }

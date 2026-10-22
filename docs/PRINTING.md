@@ -22,6 +22,8 @@ Only one submission can run at a time. XPS completion without an error means Win
 
 ## Calibration
 
+After opening artwork, Printer calibration is available beside the equally prominent Print and Export PDF actions. The footer labels dimensions as the target and keeps a ruler-check warning separate from that nominal geometry. Later dismisses the first-run explanation without hiding calibration access or implying that physical accuracy was verified.
+
 `ExportCalibrationAsync` and `PrintCalibrationAsync` produce four sheets in a 2 × 2 arrangement using the same layout model. Every sheet includes independently measurable four-inch X/Y rulers with quarter-inch ticks, a one-inch global grid, diagonal crossing lines and concentric circles at the central page junction. Print the fixture with the exact intended paper, quality, borderless expansion and pathway; measure both rulers and inspect the assembled page edges. Repeat to assess feed drift and reproducibility.
 
 Calibration records store printer, driver, profile, orientation, media notes, pathway, measurement date, observed clipping and measured X/Y lengths. A successful direct calibration handoff returns `PrintResult.Driver` and `DriverFingerprint`; save those with the record. `DriverFingerprint` is a hash of the validated PrintTicket (including vendor-specific features, excluding copies) plus the trim margin. `DriverSettings` retains the user's human-readable notes. PDF-viewer measurements remain a separate pathway and are not automatically applied to nominal PDF output.

@@ -53,6 +53,16 @@
           "PDFsharp": "[6.2.4, )"
         }
       }
+    },
+    "net10.0-windows7.0/win-x64": {
+      "Magick.NET-Q8-x64": {
+        "type": "Transitive",
+        "resolved": "15.0.0",
+        "contentHash": "RVfIbAddWlHEr6aJiYAYIRn1P7bQUoSv9GJN0fZmcatnenaD4KTtzoxOFYq67KXegLTsBQHsGdjzgGDW5d4Ing==",
+        "dependencies": {
+          "Magick.NET.Core": "15.0.0"
+        }
+      }
     }
   }
 }

@@ -29,17 +29,39 @@ public sealed class PreviewSurface : FrameworkElement
     }
     public void Fit() { Zoom = 1; pan = default; InvalidateVisual(); }
     public void Detail() { Zoom = Zoom == 1 ? 3 : 1; pan = default; InvalidateVisual(); }
+
+    // Invert the same artwork-to-paper translation used by the output adapters.
+    // Margin strips overlap in this assembled view: they are discarded, not extra artwork.
+    internal static RectInches SheetInArtwork(LayoutPlan plan, PageTile tile) => new(
+        tile.ArtworkBounds.X - tile.PaperBounds.X,
+        tile.ArtworkBounds.Y - tile.PaperBounds.Y, plan.PageWidth, plan.PageHeight);
+
+    internal static RectInches PaperExtent(LayoutPlan plan)
+    {
+        var sheets = plan.Pages.Select(tile => SheetInArtwork(plan, tile)).ToArray();
+        decimal left = sheets.Min(s => s.X), top = sheets.Min(s => s.Y);
+        return new(left, top, sheets.Max(s => s.Right) - left, sheets.Max(s => s.Bottom) - top);
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
         dc.DrawRectangle(Brushes.Transparent, null, new Rect(RenderSize));
         if (Image == null || Layout == null || ActualWidth < 20 || ActualHeight < 20) return;
         var plan = Layout;
-        double w = (double)plan.Artwork.WidthInches, h = (double)plan.Artwork.HeightInches;
-        double scale = Math.Min((ActualWidth - 78) / w, (ActualHeight - 78) / h) * Zoom;
-        double x = (ActualWidth - w * scale) / 2 + pan.X, y = (ActualHeight - h * scale) / 2 + pan.Y;
-        var rect = new Rect(x, y, w * scale, h * scale);
-        dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(16, 35, 60, 59)), null, new Rect(x + 4, y + 7, rect.Width, rect.Height), 1, 1);
+        var paper = PaperExtent(plan);
+        double scale = Math.Min(Math.Max(1, ActualWidth - 78) / (double)paper.Width,
+            Math.Max(1, ActualHeight - 78) / (double)paper.Height) * Zoom;
+        double x = (ActualWidth - (double)paper.Width * scale) / 2 - (double)paper.X * scale + pan.X;
+        double y = (ActualHeight - (double)paper.Height * scale) / 2 - (double)paper.Y * scale + pan.Y;
+        Rect View(RectInches bounds) => new(x + (double)bounds.X * scale, y + (double)bounds.Y * scale,
+            (double)bounds.Width * scale, (double)bounds.Height * scale);
+        var rect = View(new(0, 0, plan.Artwork.WidthInches, plan.Artwork.HeightInches));
+        var paperRect = View(paper);
+        dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(16, 35, 60, 59)), null,
+            new Rect(paperRect.X + 4, paperRect.Y + 7, paperRect.Width, paperRect.Height), 1, 1);
+        var unusedPaper = new SolidColorBrush(Color.FromRgb(248, 244, 235));
+        foreach (var tile in plan.Pages) dc.DrawRectangle(unusedPaper, null, View(SheetInArtwork(plan, tile)));
         dc.DrawRectangle(Brushes.White, null, rect);
         dc.PushClip(new RectangleGeometry(rect));
         var placement = LayoutEngine.ImagePlacement(plan.Artwork,
@@ -50,16 +72,39 @@ public sealed class PreviewSurface : FrameworkElement
             var pen = new Pen(new SolidColorBrush(Color.FromArgb(165, 48, 99, 89)), 1) { DashStyle = new DashStyle(new double[] { 5, 4 }, 0) };
             foreach (var tile in plan.Pages)
             {
-                var b = tile.ArtworkBounds;
-                var r = new Rect(x + (double)b.X * scale, y + (double)b.Y * scale, (double)b.Width * scale, (double)b.Height * scale);
+                var r = View(tile.ArtworkBounds);
                 dc.DrawRectangle(null, pen, r);
+            }
+        }
+        dc.Pop();
+
+        // Expose the complete sheet boundaries only on unused paper. Drawing margin
+        // outlines through the assembled artwork would suggest duplicated image strips.
+        dc.PushClip(new CombinedGeometry(GeometryCombineMode.Exclude,
+            new RectangleGeometry(new Rect(RenderSize)), new RectangleGeometry(rect)));
+        var sheetPen = new Pen(new SolidColorBrush(Color.FromRgb(207, 201, 187)), 1);
+        foreach (var tile in plan.Pages) dc.DrawRectangle(null, sheetPen, View(SheetInArtwork(plan, tile)));
+        dc.Pop();
+        var trimPen = new Pen(new SolidColorBrush(Color.FromRgb(146, 164, 150)), 1);
+        if (ShowGrid) trimPen.DashStyle = new DashStyle(new double[] { 3, 3 }, 0);
+        dc.DrawRectangle(null, trimPen, rect);
+
+        // Partial edge tiles may be narrower than a page label. Let the label extend
+        // onto its own unused paper, without clipping the number at the finished edge.
+        if (ShowGrid)
+        {
+            foreach (var tile in plan.Pages)
+            {
+                var r = View(tile.ArtworkBounds);
+                var sheet = View(SheetInArtwork(plan, tile));
                 var label = new FormattedText($"{tile.Row + 1}.{tile.Column + 1}", Lang.Culture, FlowDirection.LeftToRight, new Typeface("Segoe UI Semibold"), 13, new SolidColorBrush(Color.FromRgb(35, 60, 59)), VisualTreeHelper.GetDpi(this).PixelsPerDip);
-                var lr = new Rect(r.X + 8, r.Y + 8, label.Width + 14, 25);
+                double labelWidth = label.Width + 14;
+                double left = Math.Min(r.X + 8, Math.Max(sheet.Left + 2, sheet.Right - labelWidth - 2));
+                double top = Math.Min(r.Y + 8, Math.Max(sheet.Top + 2, sheet.Bottom - 27));
+                var lr = new Rect(left, top, labelWidth, 25);
                 dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(228, 255, 255, 255)), null, lr, 5, 5);
                 dc.DrawText(label, new Point(lr.X + 7, lr.Y + 3));
             }
         }
-        dc.Pop();
-        dc.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromRgb(192, 207, 197)), 1), rect);
     }
 }

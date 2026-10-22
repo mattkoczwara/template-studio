@@ -39,6 +39,11 @@ var peek = await store.PeekAsync(project);
 Check(peek.State.Title == state.Title && peek.ThumbnailBytes!.SequenceEqual(data), "Lazy manifest/thumbnail and Polish title");
 Check(!Directory.Exists(Path.Combine(testRoot, "cache")), "Peek does not extract original");
 var reopened = await store.OpenAsync(project);
+string blockedParent = Path.Combine(testRoot, "parent-is-a-file");
+await File.WriteAllTextAsync(blockedParent, "sentinel");
+await Reject(() => store.SaveAsync(Path.Combine(blockedParent, "project.mosaic"), state,
+    source with { OriginalPath = reopened.OriginalPath }), "ProjectSaveFailed", "Destination directory failure is actionable");
+Check(await File.ReadAllTextAsync(blockedParent) == "sentinel", "Failed destination directory preserves existing file");
 Check((await File.ReadAllBytesAsync(reopened.OriginalPath)).SequenceEqual(data), "Embedded source survives deletion of download");
 Check(reopened.State.Size == state.Size && reopened.State.Composition == state.Composition &&
     reopened.State.Paper == state.Paper && reopened.State.Quality == state.Quality &&

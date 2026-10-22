@@ -50,15 +50,17 @@ Install **.NET SDK 10.0.402** first (see [global.json](global.json)). The first 
 
 Find the installer and adjacent SHA-256 file in `artifacts/installer/`. Current builds are **unsigned**. For tool paths, package verification and installation details, see [Windows distribution](docs/DISTRIBUTION.md). Run the generated setup executable, then launch Mosaic Template Studio from Start or the desktop shortcut.
 
+For development, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Install-DevelopmentShortcut.ps1` once. **Mosaic Studio — Latest Build** on your desktop builds changed sources in Release before opening the editor. See [developer launcher setup and troubleshooting](docs/DISTRIBUTION.md#developer-desktop-launcher).
+
 ## Make your first template
 
 1. **Open artwork.** Open or drop a JPEG, PNG, WebP or BMP into the editor.
 2. **Choose its finished size.** Enter width or height in inches. Proportions stay locked by default; Polish input accepts a decimal comma.
 3. **Review the sheets.** Check the preview grid and automatic orientation. Paper and printing settings let you choose margins and the printer profile.
-4. **Choose image quality.** Keep Standard, or enhance locally and compare the details. AI can change fine lines; your original stays preserved.
+4. **Choose image quality.** Keep Standard, or select Enhanced to run local AI and compare the details. Enhancement options include the CPU fallback. AI can change fine lines; your original stays preserved.
 5. **Print or export.** Print PDFs at **Actual size / 100%**. Save a `.mosaic` project with **Ctrl+S** to retain the image and editing settings.
 
-**Before an important print:** use the four-sheet calibration pattern. Epson ET-8500 defaults to color, borderless Letter and zero overlap, but driver expansion can crop seams. Use margin-and-trim when edge-to-edge output is unreliable. Canon MF210 direct printing uses margins and monochrome; nominal PDFs stay color unless grayscale is selected. See [printing and calibration](docs/PRINTING.md).
+**Before an important print:** open Printer calibration beside Print and Export PDF and use the four-sheet test pattern. The summary shows your target dimensions; printed accuracy requires measurement. Epson ET-8500 defaults to color, borderless Letter and zero overlap, but driver expansion can crop seams. Use margin-and-trim when edge-to-edge output is unreliable. Canon MF210 direct printing uses margins and monochrome; nominal PDFs stay color unless grayscale is selected. See [printing and calibration](docs/PRINTING.md).
 
 <details>
 <summary><strong>Polski — ten sam projekt, ten sam rozmiar</strong></summary>

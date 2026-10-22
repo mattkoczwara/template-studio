@@ -80,10 +80,10 @@ public sealed class ProjectStore
         var target = Path.GetFullPath(path);
         if (target.Equals(Path.GetFullPath(source.OriginalPath), StringComparison.OrdinalIgnoreCase))
             throw new ProjectStorageException("SourceChanged");
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         string temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             await using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, true))
             {
                 using var archive = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true);
